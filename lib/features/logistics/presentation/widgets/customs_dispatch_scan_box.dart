@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import '../../providers/guide_provider.dart';
-import '../../models/operation_models.dart';
 import '../controllers/scan_controller.dart';
 
 /// Widget para escaneo de guías en despacho en aduana

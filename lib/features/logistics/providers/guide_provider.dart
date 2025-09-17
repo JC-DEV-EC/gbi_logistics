@@ -243,6 +243,7 @@ class GuideProvider extends ChangeNotifier {
   }
 
   // Métodos de despacho
+  /// Despacha guías a cliente y actualiza la UI
   Future<ApiResponse<void>> dispatchToClient(DispatchGuideToClientRequest request) async {
     try {
       _isLoading = true;
@@ -252,12 +253,24 @@ class GuideProvider extends ChangeNotifier {
       // Llamar directamente al endpoint dispatch-to-client
       final response = await _guideService.dispatchToClient(request);
 
-      if (!response.isSuccessful) {
-        if (response.message?.contains('sesión ha expirado') ?? false) {
-          _guides.clear();
-          _guideUiStates.clear();
-          _selectedGuides.clear();
+      if (response.isSuccessful) {
+        // Limpiar los estados y selecciones de las guías despachadas
+        for (final guide in request.guides) {
+          _guideUiStates.remove(guide);
+          _selectedGuides.remove(guide);
         }
+        
+        // Recargar la lista
+        await loadGuides(
+          page: 1,
+          pageSize: 50,
+          status: 'ReceivedInLocalWarehouse',
+          hideValidated: false,
+        );
+      } else if (response.message?.contains('sesión ha expirado') ?? false) {
+        _guides.clear();
+        _guideUiStates.clear();
+        _selectedGuides.clear();
         _error = response.message;
       }
 

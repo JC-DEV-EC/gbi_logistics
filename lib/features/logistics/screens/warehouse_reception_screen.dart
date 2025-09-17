@@ -4,6 +4,7 @@ import '../presentation/widgets/warehouse_reception_list_screen.dart';
 import '../presentation/widgets/warehouse_reception_scan_box.dart';
 import '../providers/guide_provider.dart';
 import '../models/operation_models.dart';
+import '../presentation/widgets/app_drawer.dart';
 
 /// Pantalla para recepción en bodega
 /// Flujo:
@@ -18,6 +19,7 @@ class WarehouseReceptionScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Recepción en Bodega'),
       ),
+      drawer: const AppDrawer(),
       body: SafeArea(
         child: Column(
           children: [

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../models/auth_models.dart';
 import '../providers/guide_provider.dart';
 import '../presentation/widgets/client_dispatch_list_screen.dart';
 import '../presentation/widgets/client_dispatch_scan_box.dart';
+import '../presentation/widgets/app_drawer.dart';
 
 /// Pantalla para despacho a cliente
 class ClientDispatchScreen extends StatefulWidget {
@@ -20,6 +22,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
       appBar: AppBar(
         title: const Text('Despacho a Cliente'),
       ),
+      drawer: const AppDrawer(),
       body: Consumer2<GuideProvider, AuthProvider>(
         builder: (context, guideProvider, authProvider, _) {
           return Column(
@@ -43,30 +46,80 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
       ) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) => DropdownButtonFormField<int>(
-          isExpanded: true,  // Permitir que el dropdown use todo el ancho disponible
-          decoration: const InputDecoration(
-            labelText: 'Seleccionar Mensajero',
-            border: OutlineInputBorder(),
-          ),
-          value: guideProvider.selectedSubcourierId,
-          items: [
-            for (final subcourier in authProvider.subcouriers)
-              DropdownMenuItem(
-                value: subcourier.id,
-                child: Text(
-                  subcourier.name ?? 'Sin nombre',
-                  overflow: TextOverflow.ellipsis,  // Truncar texto si es muy largo
-                ),
-              ),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              guideProvider.setSelectedSubcourier(value);
+      child: Autocomplete<int>(
+        fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+          void _showAllOptions() {
+            if (!focusNode.hasFocus) {
+              focusNode.requestFocus();
             }
-          },
+            // Forzar un cambio para que Autocomplete abra el overlay
+            final original = textEditingController.text;
+            textEditingController.value = textEditingController.value.copyWith(
+              text: original + ' ',
+              selection: TextSelection.collapsed(offset: (original + ' ').length),
+            );
+            Future.microtask(() {
+              textEditingController.value = textEditingController.value.copyWith(
+                text: original,
+                selection: TextSelection.collapsed(offset: original.length),
+              );
+            });
+          }
+
+          return TextFormField(
+            controller: textEditingController,
+            focusNode: focusNode,
+            decoration: InputDecoration(
+              labelText: 'Seleccionar Subcourier',
+              hintText: 'Escriba o seleccione un subcourier',
+              border: const OutlineInputBorder(),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    tooltip: 'Buscar subcourier',
+                    onPressed: () {
+                      if (!focusNode.hasFocus) {
+                        focusNode.requestFocus();
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_drop_down),
+                    tooltip: 'Ver todos',
+                    onPressed: _showAllOptions,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+        initialValue: TextEditingValue(
+          text: authProvider.subcouriers
+            .firstWhere(
+              (sub) => sub.id == guideProvider.selectedSubcourierId,
+              orElse: () => SubcourierInfo(id: 0, name: '')
+            ).name ?? ''
         ),
+        optionsBuilder: (textEditingValue) {
+          if (textEditingValue.text.isEmpty) {
+            return authProvider.subcouriers.map((sub) => sub.id);
+          }
+          return authProvider.subcouriers
+            .where((sub) => 
+              (sub.name ?? '').toLowerCase()
+                .contains(textEditingValue.text.toLowerCase()))
+            .map((sub) => sub.id);
+        },
+        displayStringForOption: (int subcourierId) {
+          return authProvider.subcouriers
+            .firstWhere((sub) => sub.id == subcourierId)
+            .name ?? 'Sin nombre';
+        },
+        onSelected: (int value) {
+          guideProvider.setSelectedSubcourier(value);
+        },
       ),
     );
   }

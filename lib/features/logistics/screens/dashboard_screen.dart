@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../models/auth_models.dart';
 import '../presentation/helpers/error_helper.dart';
 import '../presentation/widgets/loading_indicator.dart';
+import '../presentation/widgets/app_drawer.dart';
 
 /// Pantalla principal del dashboard
 class DashboardScreen extends StatefulWidget {
@@ -33,16 +35,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              auth.logout();
-              Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
-        ],
       ),
+      drawer: const AppDrawer(),
       body: RefreshIndicator(
         onRefresh: _refreshDashboard,
         child: auth.isLoading
@@ -99,6 +93,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 24),
 
+
         // Estadísticas de guías
         Text(
           'Estadísticas de Guías',
@@ -115,102 +110,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
               childAspectRatio: 1.2,
-              children: dashboardData.guideStadistics.map((stat) {
-                return Card(
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/guides',
-                        arguments: stat.status,
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: <Widget>[
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              stat.count.toString(),
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Flexible(
-                            child: Text(
-                              stat.status ?? 'Sin estado',
-                              style: theme.textTheme.titleMedium,
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            );
+              children: [
+                // Mostrar todos los estados importantes, incluso cuando estén en 0
+                ...[  // Lista de estados principales que siempre queremos mostrar
+                  'Despachado de Aduana',
+                  'Recibido en Bodega Local',
+                  'Tránsito a Bodega',
+                  'Listo para Entrega',
+                ].map((estado) => _buildStatCard(
+                  context,
+                  estado,
+                  dashboardData.guideStadistics
+                    .firstWhere(
+                      (stat) => stat.status == estado,
+                      orElse: () => GuideStateStatistics(status: estado, count: 0)
+                    ).count,
+                  '/guides',
+                )),
+                // Mostrar otros estados si existen y no son los principales
+                ...dashboardData.guideStadistics
+                  .where((stat) => ![  // Excluir los estados principales
+                    'Despachado de Aduana',
+                    'Recibido en Bodega Local',
+                    'Tránsito a Bodega',
+                    'Listo para Entrega',
+                    'Despacho en Aduana',  // Excluir explícitamente este estado
+                  ].contains(stat.status))
+                  .map((stat) => _buildStatCard(
+                    context,
+                    stat.status ?? 'Sin estado',
+                    stat.count,
+                    '/guides',
+                  )),
           },
         ),
-        const SizedBox(height: 24),
+      ],
+    );
+  }
 
-        // Accesos rápidos
-        Text(
-          'Accesos Rápidos',
-          style: theme.textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
-        Card(
+  Widget _buildStatCard(BuildContext context, String title, int count, String route) {
+    final theme = Theme.of(context);
+    return Card(
+      child: InkWell(
+        onTap: () {
+          Navigator.pushNamed(context, route, arguments: title);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.local_shipping_outlined),
-                title: const Text('Despacho en Aduana'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pushNamed(context, '/customs-dispatch');
-                },
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  count.toString(),
+                  style: theme.textTheme.displayMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.directions_run),
-                title: const Text('Tránsito a Bodega'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pushNamed(context, '/warehouse-transit');
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.warehouse_outlined),
-                title: const Text('Recepción en Bodega'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pushNamed(context, '/warehouse-reception');
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.home_outlined),
-                title: const Text('Despacho a Cliente'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.pushNamed(context, '/client-dispatch');
-                },
+              const SizedBox(height: 4),
+              Flexible(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

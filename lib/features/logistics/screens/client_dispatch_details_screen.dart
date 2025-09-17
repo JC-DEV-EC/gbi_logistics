@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/transport_cube_provider.dart';
 import '../providers/guide_provider.dart';
 import '../providers/auth_provider.dart';
+import '../models/auth_models.dart';
 import '../models/transport_cube_details.dart';
 import '../models/operation_models.dart';
 import '../presentation/helpers/error_helper.dart';
@@ -116,25 +117,82 @@ class _ClientDispatchDetailsScreenState
               ],
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<int>(
-              decoration: InputDecoration(
-                labelText: 'Subcourier',
-                hintText: 'Seleccione un subcourier',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              value: guideProvider.selectedSubcourierId,
-              items: context.read<AuthProvider>().subcouriers.map((sub) {
-                return DropdownMenuItem(
-                  value: sub.id,
-                  child: Text(sub.name ?? 'Subcourier ${sub.id}'),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  context.read<GuideProvider>().setSelectedSubcourier(value);
+            Autocomplete<int>(
+              fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                void _showAllOptions() {
+                  if (!focusNode.hasFocus) {
+                    focusNode.requestFocus();
+                  }
+                  // Forzar un cambio para que Autocomplete abra el overlay
+                  final original = textEditingController.text;
+                  textEditingController.value = textEditingController.value.copyWith(
+                    text: original + ' ',
+                    selection: TextSelection.collapsed(offset: (original + ' ').length),
+                  );
+                  Future.microtask(() {
+                    textEditingController.value = textEditingController.value.copyWith(
+                      text: original,
+                      selection: TextSelection.collapsed(offset: original.length),
+                    );
+                  });
                 }
+
+                return TextFormField(
+                  controller: textEditingController,
+                  focusNode: focusNode,
+                  decoration: InputDecoration(
+                    labelText: 'Seleccionar Subcourier',
+                    hintText: 'Escriba o seleccione un Subcourier',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.search),
+                          tooltip: 'Buscar Subcourier',
+                          onPressed: () {
+                            if (!focusNode.hasFocus) {
+                              focusNode.requestFocus();
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_drop_down),
+                          tooltip: 'Ver todos',
+                          onPressed: _showAllOptions,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              initialValue: TextEditingValue(
+                text: context.read<AuthProvider>().subcouriers
+                  .firstWhere(
+                    (sub) => sub.id == guideProvider.selectedSubcourierId,
+                    orElse: () => const SubcourierInfo(id: 0, name: '')
+                  ).name ?? ''
+              ),
+              optionsBuilder: (textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return context.read<AuthProvider>().subcouriers
+                    .map((sub) => sub.id);
+                }
+                return context.read<AuthProvider>().subcouriers
+                  .where((sub) => 
+                    (sub.name ?? '').toLowerCase()
+                      .contains(textEditingValue.text.toLowerCase()))
+                  .map((sub) => sub.id);
+              },
+              displayStringForOption: (int subcourierId) {
+                return context.read<AuthProvider>().subcouriers
+                  .firstWhere((sub) => sub.id == subcourierId)
+                  .name ?? 'Subcourier $subcourierId';
+              },
+              onSelected: (int value) {
+                context.read<GuideProvider>().setSelectedSubcourier(value);
               },
             ),
             const SizedBox(height: 24),
@@ -289,10 +347,45 @@ class _ClientDispatchDetailsScreenState
       );
 
       if (response.isSuccessful) {
+        // Limpiar el estado de la guía despachada
+        for (final guide in guides) {
+          context.read<GuideProvider>().removeGuideUiState(guide);
+        }
+
+        // Recargar la lista para que se actualice
+        await context.read<GuideProvider>().loadGuides(
+          page: 1,
+          pageSize: 50,
+          status: 'ReceivedInLocalWarehouse',
+          hideValidated: false,
+        );
+
+        if (!mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response.messageDetail ?? response.message ?? '✅ Guías despachadas exitosamente'),
+            content: Row(
+              children: [
+                const Icon(Icons.local_shipping, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Guías despachadas exitosamente'),
+                      Text(
+                        'Las guías están listas para entrega al cliente final',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withOpacity(0.9)
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
             backgroundColor: Colors.green,
           ),
         );

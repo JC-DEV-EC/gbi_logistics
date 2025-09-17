@@ -1,15 +1,21 @@
-import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
+
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/models/api_response.dart';
-import '../providers/transport_cube_provider.dart';
-import '../providers/guide_provider.dart';
+
+// Providers
 import '../providers/auth_provider.dart';
+import '../providers/transport_cube_provider.dart';
+
+// Models
 import '../models/transport_cube_state.dart';
-import '../models/operation_models.dart';
+
+// Presentation - constants, helpers & widgets
 import '../presentation/constants/visual_states.dart';
+import '../presentation/widgets/app_drawer.dart';
 import '../presentation/widgets/customs_dispatch_scan_box.dart';
-import '../presentation/helpers/error_helper.dart';
+
+// Screens
 import 'transport_cube_list_screen.dart';
 
 /// Pantalla para despacho en aduana
@@ -31,17 +37,23 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
         'Token refresh before create cube - Refreshed/Valid: $refreshed',
         name: 'CustomsDispatchScreen',
       );
+
       // Crear el cubo con las guías (el backend maneja los estados)
       final response = await provider.createTransportCube(guides);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          response.messageDetail ?? response.message ?? 
-          (response.isSuccessful ? 'Cubo creado correctamente' : 'Error al crear cubo')
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            response.messageDetail ??
+                response.message ??
+                (response.isSuccessful
+                    ? 'Cubo creado correctamente'
+                    : 'Error al crear cubo'),
+          ),
+          backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
         ),
-        backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
-      ));
+      );
 
       // Si fue exitoso, recargar la lista de cubos (forzado)
       if (response.isSuccessful) {
@@ -49,10 +61,12 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error inesperado: $e'),
-        backgroundColor: Colors.red,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error inesperado: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -60,18 +74,25 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
   void initState() {
     super.initState();
     developer.log(
-        'CustomsDispatchScreen - Initializing', name: 'CustomsDispatchScreen');
+      'CustomsDispatchScreen - Initializing',
+      name: 'CustomsDispatchScreen',
+    );
+
     // Usar addPostFrameCallback para evitar setState durante build
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      developer.log('CustomsDispatchScreen - Starting initial load',
-          name: 'CustomsDispatchScreen');
+      developer.log(
+        'CustomsDispatchScreen - Starting initial load',
+        name: 'CustomsDispatchScreen',
+      );
+
       final provider = context.read<TransportCubeProvider>();
+
       // Forzar limpieza y recarga
       provider.clearSelection();
       await provider.changeState(VisualStates.created);
+
       developer.log(
-        'CustomsDispatchScreen - Initial load complete - Cubes count: ${provider
-            .cubes.length}',
+        'CustomsDispatchScreen - Initial load complete - Cubes count: ${provider.cubes.length}',
         name: 'CustomsDispatchScreen',
       );
     });
@@ -83,12 +104,12 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
     final hasSelectedCubes = provider.selectedCubeIds.isNotEmpty;
 
     developer.log(
-      'CustomsDispatchScreen build - hasSelectedCubes: $hasSelectedCubes, selectedIds: ${provider
-          .selectedCubeIds.join(", ")}',
+      'CustomsDispatchScreen build - hasSelectedCubes: $hasSelectedCubes, selectedIds: ${provider.selectedCubeIds.join(", ")}',
       name: 'CustomsDispatchScreen',
     );
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Despacho en Aduana'),
         actions: [
@@ -96,12 +117,23 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
             TextButton.icon(
               onPressed: () async {
                 // Enviar cubos seleccionados a estado Tránsito en Bodega (Sent)
-                final resp = await provider.changeSelectedCubesState(TransportCubeState.SENT);
+                final resp = await provider.changeSelectedCubesState(
+                  TransportCubeState.SENT,
+                );
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(resp.messageDetail ?? resp.message ?? 'Operación completada'),
-                  backgroundColor: resp.isSuccessful ? Colors.green : Colors.red,
-                ));
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      resp.messageDetail ??
+                          resp.message ??
+                          'Operación completada',
+                    ),
+                    backgroundColor:
+                    resp.isSuccessful ? Colors.green : Colors.red,
+                  ),
+                );
+
                 if (resp.isSuccessful) {
                   // Recargar listado actualizado y limpiar selección
                   await provider.loadCubes(force: true);
@@ -109,11 +141,12 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
               },
               icon: const Icon(Icons.local_shipping),
               label: Text(
-                  'Enviar a Tránsito ${provider.selectedCubeIds.length} cubos'),
+                'Enviar a Tránsito ${provider.selectedCubeIds.length} cubos',
+              ),
             ),
         ],
       ),
-      body: TransportCubeListScreen(
+      body: const TransportCubeListScreen(
         title: 'Despacho en Aduana',
         initialState: VisualStates.created,
         showHistoric: false,
