@@ -94,8 +94,19 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
         actions: [
           if (hasSelectedCubes)
             TextButton.icon(
-              onPressed: () => _createNewCube([]),
-              // Hook opcional si se quiere desde aquí
+              onPressed: () async {
+                // Enviar cubos seleccionados a estado Tránsito en Bodega (Sent)
+                final resp = await provider.changeSelectedCubesState(TransportCubeState.SENT);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(resp.messageDetail ?? resp.message ?? 'Operación completada'),
+                  backgroundColor: resp.isSuccessful ? Colors.green : Colors.red,
+                ));
+                if (resp.isSuccessful) {
+                  // Recargar listado actualizado y limpiar selección
+                  await provider.loadCubes(force: true);
+                }
+              },
               icon: const Icon(Icons.local_shipping),
               label: Text(
                   'Enviar a Tránsito ${provider.selectedCubeIds.length} cubos'),

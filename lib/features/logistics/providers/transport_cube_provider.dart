@@ -225,7 +225,7 @@ List<op.TransportCubeInfoAPI> get cubes {
         return response;
       }
 
-      _errorMessage = response.message ?? 'No se pudo crear el cubo';
+      _errorMessage = response.messageDetail ?? 'No se pudo crear el cubo';
       return response;
     } catch (e) {
       _errorMessage = 'No se pudo crear el cubo';
@@ -313,8 +313,8 @@ final request = op.ChangeTranportCubesStateRequest(
         _selectedCubes.clear();
         _errorMessage = null;
         
-        // Recargar cubos después de cambiar estado
-        await loadCubes();
+        // Solo recargar la lista actual para ver los cubos desaparecer
+        await loadCubes(force: true);
         
         developer.log(
           'Successfully changed cube states to $newState - Message: ${response.messageDetail ?? response.message}',
@@ -448,7 +448,7 @@ final request = op.ChangeTranportCubesStateRequest(
       final response = await _service.getTransportCubes(
         page: page,
         itemsPerPage: itemsPerPage,
-        state: TransportCubeState.CREATED,  // Siempre usar Created para este listado
+        state: _selectedState,  // Usar el estado seleccionado actualmente
       );
 
       developer.log(

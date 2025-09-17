@@ -72,7 +72,8 @@ class ErrorHelper {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
@@ -104,7 +105,7 @@ class ErrorHelper {
               ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

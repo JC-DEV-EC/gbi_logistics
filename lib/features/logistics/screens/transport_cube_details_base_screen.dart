@@ -38,7 +38,7 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
     if (!mounted) throw Exception('Widget desmontado');
     
     if (!response.isSuccessful || response.content == null) {
-      throw Exception(response.message ?? 'No se pudieron cargar los detalles');
+      throw Exception(response.messageDetail ?? response.message ?? 'No se pudieron cargar los detalles');
     }
 
     return response.content!;

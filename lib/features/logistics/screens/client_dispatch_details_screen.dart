@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import '../../../core/services/app_logger.dart';
 import 'package:provider/provider.dart';
 import '../providers/transport_cube_provider.dart';
 import '../providers/guide_provider.dart';
@@ -239,6 +241,7 @@ class _ClientDispatchDetailsScreenState
 
   /// Confirmar despacho
   Future<void> _confirmDispatch(BuildContext context) async {
+    AppLogger.log('Iniciando proceso de despacho', source: 'ClientDispatchDetailsScreen');
     final selectedSubcourierId =
         context.read<GuideProvider>().selectedSubcourierId;
     if (selectedSubcourierId == null) return;
@@ -278,6 +281,13 @@ class _ClientDispatchDetailsScreenState
       final response = await context.read<GuideProvider>().dispatchToClient(request);
 
       if (!mounted) return;
+      AppLogger.log(
+        'Respuesta del despacho:\n'
+        '- Exitoso: ${response.isSuccessful}\n'
+        '- Mensaje: ${response.messageDetail ?? response.message}',
+        source: 'ClientDispatchDetailsScreen'
+      );
+
       if (response.isSuccessful) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

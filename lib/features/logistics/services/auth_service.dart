@@ -35,7 +35,7 @@ class AuthService {
         await _storage.setToken(token);
       } else if (!response.isSuccessful) {
         return ApiResponse.error(
-          message: response.message,
+          message: response.messageDetail ?? response.message,
           content: LoginResponse.empty(),
         );
       }

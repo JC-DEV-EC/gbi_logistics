@@ -264,7 +264,7 @@ class GuideProvider extends ChangeNotifier {
       return response;
     } catch (e) {
       _error = e.toString();
-      return ApiResponse.error(message: e.toString());
+      return ApiResponse<UpdateGuideStatusResponse>.error(message: e.toString());
     } finally {
       _isLoading = false;
       notifyListeners();

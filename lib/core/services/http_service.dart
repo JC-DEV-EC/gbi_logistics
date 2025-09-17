@@ -21,7 +21,6 @@ class HttpService {
       final isCubeEndpoint = lower.contains('/guide/new-transport-cube') ||
           lower.contains('/guide/get-transport-cubes');
       if (!isCubeEndpoint) return body;
-      developer.debugger();
       final dynamic parsed = jsonDecode(body);
       if (parsed is Map<String, dynamic>) {
         // Eliminar message y usar solo messageDetail
@@ -171,11 +170,15 @@ class HttpService {
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
-      final defaultMessage = message == 'Su transacción fue realizada con éxito (0)' ? null : message;
+      // Si el mensaje es el de éxito por defecto, moverlo a messageDetail
+      final mDetail = message == 'Su transacción fue realizada con éxito (0)'
+          ? message // Usar el mensaje genérico como messageDetail
+          : messageDetail;
+      
       return ApiResponse(
         isSuccessful: true,
-        message: messageDetail ?? defaultMessage,
-        messageDetail: messageDetail,
+        message: null, // No usar message para mensajes de éxito
+        messageDetail: mDetail,
         content: fromJson(json),
       );
     } catch (e) {
@@ -224,6 +227,11 @@ class HttpService {
         );
       }
 
+      AppLogger.log(
+        'Respuesta cruda del servidor:\n${response.body}',
+        source: 'HttpService'
+      );
+
       Map<String, dynamic> json;
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -240,6 +248,7 @@ class HttpService {
         return ApiResponse(
           isSuccessful: true,
           message: message,
+          messageDetail: messageDetail,
           content: fromJson(json),
         );
       }
@@ -272,15 +281,17 @@ class HttpService {
 
       // Si el código no es 0 (éxito) o 1 (warning), es un error
       if (code > 1) {
-        final error = ApiError(code: code, message: messageDetail ?? message);
-        return ApiResponse.error(message: error.userMessage);
+        // Para errores, priorizar siempre messageDetail
+        return ApiResponse.error(
+          message: messageDetail ?? message,
+          messageDetail: messageDetail
+        );
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
-      final defaultMessage = message == 'Su transacción fue realizada con éxito (0)' ? null : message;
       return ApiResponse(
         isSuccessful: true,
-        message: messageDetail ?? defaultMessage,
+        message: message,
         messageDetail: messageDetail,
         content: fromJson != null ? fromJson(json) : null,
       );
@@ -352,9 +363,15 @@ class HttpService {
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
+      // Si el mensaje es el de éxito por defecto, moverlo a messageDetail
+      final mDetail = message == 'Su transacción fue realizada con éxito (0)'
+          ? message // Usar el mensaje genérico como messageDetail
+          : messageDetail;
+      
       return ApiResponse(
         isSuccessful: true,
-        message: messageDetail ?? message,
+        message: null, // No usar message para mensajes de éxito
+        messageDetail: mDetail,
         content: fromJson != null ? fromJson(json) : null,
       );
     } catch (e) {

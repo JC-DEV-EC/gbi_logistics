@@ -64,10 +64,36 @@ class GuideService {
 
   /// Despacha una guía a cliente
   Future<ApiResponse<void>> dispatchToClient(DispatchGuideToClientRequest request) async {
-    return _http.post<void>(
+    AppLogger.log(
+      'Despachando guías a cliente:\nSubcourier: ${request.subcourierId}\nGuías: ${request.guides.join(", ")}',
+      source: 'GuideService'
+    );
+
+    AppLogger.log(
+      'Request de despacho:\n'
+      'URL: ${ApiEndpoints.dispatchToClient}\n'
+      'Body: ${request.toJson()}',
+      source: 'GuideService'
+    );
+
+    final response = await _http.post<void>(
       ApiEndpoints.dispatchToClient,
       request.toJson(),
-      (_) => null,
+      (json) {
+        AppLogger.log(
+          'Respuesta raw del backend:\n${json.toString()}',
+          source: 'GuideService'
+        );
+        // No necesitamos parsear el content, solo usar el code/message/messageDetail
+        return null;
+      },
     );
+
+    AppLogger.log(
+      'Respuesta despacho:\nExitoso: ${response.isSuccessful}\nMensaje: ${response.messageDetail ?? response.message}',
+      source: 'GuideService'
+    );
+
+    return response;
   }
 }

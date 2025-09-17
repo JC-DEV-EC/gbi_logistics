@@ -35,15 +35,8 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
   }
 
   Future<void> _initializeAndLoad() async {
-    final provider = context.read<TransportCubeProvider>();
-    final currentState = provider.selectedState;
-    
-    // Solo cambiar estado si es diferente al actual para evitar recargas innecesarias
-    if (currentState != widget.initialState) {
-      await provider.changeState(widget.initialState);
-    } else {
-      await _loadCubes();
-    }
+    // Solo cargar los cubos - el estado ya está configurado por la pantalla padre
+    await _loadCubes();
   }
 
   Future<void> _loadCubes() async {
