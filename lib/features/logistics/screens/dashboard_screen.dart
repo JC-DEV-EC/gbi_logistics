@@ -142,6 +142,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     stat.count,
                     '/guides',
                   )),
+              ],
+            );
           },
         ),
       ],
