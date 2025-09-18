@@ -49,6 +49,12 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
       });
       SystemSound.play(SystemSoundType.click);
       _controller.clear();
+      // Mantener el foco
+      Future.microtask(() {
+        if (!_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
+      });
     });
   }
 
@@ -57,6 +63,12 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
       widget.onComplete(_scannedGuides.toList());
       setState(() {
         _scannedGuides.clear();
+      });
+      // Mantener el foco
+      Future.microtask(() {
+        if (!_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
       });
     }
   }
@@ -70,6 +82,13 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Asegurar que siempre tenemos el foco
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 8),
@@ -86,8 +105,8 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
-              autofocus: true,
-              decoration: InputDecoration(
+            autofocus: true,
+            decoration: InputDecoration(
                 hintText: 'Escanee o ingrese el código de la guía',
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: InputBorder.none,

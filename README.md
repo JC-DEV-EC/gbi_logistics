@@ -130,3 +130,18 @@ lib/
 - Nombres de métodos y variables en camelCase
 - Constantes en SCREAMING_SNAKE_CASE
 - Documentación de clases y métodos públicos
+
+## Documentación
+
+- Visión técnica y arquitectura: [docs/technical.md](docs/technical.md)
+- API (endpoints, modelos y estados): [docs/api.md](docs/api.md)
+- Guía de desarrollo (setup, flujo y estándares): [docs/development.md](docs/development.md)
+- Componentes y UI: [docs/components.md](docs/components.md)
+- Flujo de estados: [docs/STATE_FLOW.md](docs/STATE_FLOW.md)
+
+## Ejecución Rápida
+
+1. flutter pub get
+2. flutter run
+
+Para más detalles de configuración, consulta [docs/development.md](docs/development.md).

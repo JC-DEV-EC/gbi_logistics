@@ -177,7 +177,7 @@ class GuideProvider extends ChangeNotifier {
   /// por lo que NO debemos comparar contra el código de estado (en inglés).
   /// Además, la búsqueda es paginada; si hay más resultados que el tamaño
   /// de página, iteramos páginas hasta encontrar coincidencia (con límite).
-  Future<GuideInfo?> searchGuide(String code, {required String status}) async {
+  Future<ApiResponse<GuideInfo>> searchGuide(String code, {required String status}) async {
     try {
       AppLogger.log(
         'Buscando guía $code con estado $status',
@@ -199,13 +199,10 @@ class GuideProvider extends ChangeNotifier {
         );
 
         if (!resp.isSuccessful || resp.content == null) {
-          if (resp.message?.contains('(61)') ?? false) {
-            _error = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
-            _guides.clear();
-            _guideUiStates.clear();
-            _selectedGuides.clear();
-          }
-          return null;
+          return ApiResponse.error(
+            message: resp.message,
+            messageDetail: resp.messageDetail
+          );
         }
 
         total = resp.content!.totalRegister;
@@ -220,7 +217,12 @@ class GuideProvider extends ChangeNotifier {
             'Guía $code encontrada (stateLabel=${match.stateLabel}) en página $page de ${((total + pageSize - 1) / pageSize).ceil()}',
             source: 'GuideProvider'
           );
-          return match;
+          return ApiResponse(
+            isSuccessful: true,
+            message: resp.message,
+            messageDetail: resp.messageDetail,
+            content: match
+          );
         }
 
         // Si ya cubrimos todos los resultados potenciales, salir
@@ -234,11 +236,17 @@ class GuideProvider extends ChangeNotifier {
         'Guía $code no encontrada con estado filtrado $status (total=$total, revisadas=$fetched)',
         source: 'GuideProvider'
       );
-      return null;
+      return ApiResponse.error(
+        message: 'La guía no se encuentra en el estado esperado',
+        messageDetail: 'La guía $code no se encuentra en estado $status'
+      );
 
     } catch (e) {
       AppLogger.error('Error buscando guía', error: e, source: 'GuideProvider');
-      return null;
+      return ApiResponse.error(
+        message: e.toString(),
+        messageDetail: 'Error al buscar la guía'
+      );
     }
   }
 

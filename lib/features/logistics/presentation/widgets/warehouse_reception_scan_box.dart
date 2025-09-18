@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
+import '../../services/app_sounds.dart';
 
 /// Widget para escaneo de guías en recepción en bodega
 class WarehouseReceptionScanBox extends StatefulWidget {
@@ -44,32 +45,58 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
     if (cleanGuide.isEmpty) return;
 
     await _scanController.processScan(() async {
-    // Buscar la guía y validar su estado
-    final response = await context.read<GuideProvider>().searchGuide(
-      cleanGuide,
-      status: 'TransitToWarehouse',  // Buscar solo guías en tránsito
-    );
+      try {
+        // Buscar la guía y validar su estado
+        final response = await context.read<GuideProvider>().searchGuide(
+          cleanGuide,
+          status: 'TransitToWarehouse', // Buscar solo guías en tránsito
+        );
 
-    if (response == null) {
-      // La guía no existe (o no coincide el estado en el backend)
-      HapticFeedback.heavyImpact();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ La guía $cleanGuide no se encuentra registrada para recepción'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } else {
-      // El backend ya filtró por estado TransitToWarehouse: aceptar el escaneo
-      setState(() {
-        _scannedGuides.add(cleanGuide);
-      });
-      SystemSound.play(SystemSoundType.click);
-    }
-
-    _controller.clear();
+        if (!response.isSuccessful || response.content == null) {
+          HapticFeedback.heavyImpact();
+          await AppSounds.error();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response.messageDetail ?? response.message ?? 'Error al procesar guía'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 10),
+            ),
+          );
+        } else {
+          // La guía existe y está en el estado correcto
+          setState(() {
+            _scannedGuides.add(cleanGuide);
+          });
+          await AppSounds.success();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response.messageDetail ?? response.message ?? 'Guía validada'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        await AppSounds.error();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error inesperado: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } finally {
+        _controller.clear();
+        // Mantener el foco
+        Future.microtask(() {
+          if (!_focusNode.hasFocus) {
+            _focusNode.requestFocus();
+          }
+        });
+      }
     });
   }
 
@@ -78,6 +105,12 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
       widget.onComplete(_scannedGuides.toList());
       setState(() {
         _scannedGuides.clear();
+      });
+      // Mantener el foco
+      Future.microtask(() {
+        if (!_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
       });
     }
   }
@@ -91,6 +124,13 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Asegurar que siempre tenemos el foco
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
 
     return Column(
       mainAxisSize: MainAxisSize.min,

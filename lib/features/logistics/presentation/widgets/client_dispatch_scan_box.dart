@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../providers/guide_provider.dart';
 import '../../models/operation_models.dart';
 import '../controllers/scan_controller.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/app_sounds.dart';
 
 /// Widget para escaneo de guías en despacho a cliente
 class ClientDispatchScanBox extends StatefulWidget {
@@ -36,12 +38,13 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
   Future<void> _processBatchGuides(GuideProvider provider) async {
     final selectedGuides = provider.selectedGuides.toList();
 
-    // Verificar que hay un subcourier seleccionado
+    // Verificar que hay un subcourier seleccionado SOLO al procesar
     if (provider.selectedSubcourierId == null) {
       if (mounted) {
+          await AppSounds.error();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('❌ Debe seleccionar un mensajero'),
+            content: Text('Debe seleccionar un mensajero antes de procesar'),
             backgroundColor: Colors.red,
           ),
         );
@@ -49,8 +52,37 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
       return;
     }
 
+    // Validar que todas las guías pertenezcan al subcourier seleccionado
+    final auth = context.read<AuthProvider>();
+    final selectedSub = auth.subcouriers.firstWhere((s) => s.id == provider.selectedSubcourierId);
+
+    final currentGuides = provider.guides;
+    final selectedGuideInfos = currentGuides.where((g) => selectedGuides.contains(g.code)).toList();
+
+    // Detectar guías con subcourier diferente
+    final mismatches = selectedGuideInfos
+        .where((g) => (g.subcourierName ?? '').trim() != (selectedSub.name ?? '').trim())
+        .toList();
+
+    if (mismatches.isNotEmpty) {
+      // Construir mensaje de alerta
+      final sample = mismatches.take(3).map((g) => g.code).join(', ');
+      final extra = mismatches.length > 3 ? ' y ${mismatches.length - 3} más' : '';
+      if (mounted) {
+          await AppSounds.error();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Las siguientes guías no pertenecen a ${selectedSub.name}: $sample$extra'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+
     try {
-      // Llamar a dispatch-to-client
+      // Llamar a dispatch-to-client cuando todo está consistente
       final request = DispatchGuideToClientRequest(
         subcourierId: provider.selectedSubcourierId!,
         guides: selectedGuides,
@@ -61,15 +93,32 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
       if (!mounted) return;
 
       if (response.isSuccessful) {
+        debugPrint('[DEBUG] Procesando respuesta exitosa del dispatch');
         // Feedback de éxito
-        SystemSound.play(SystemSoundType.click);
+          await AppSounds.success();
+        
+        if (!mounted) return;
+
+        // Limpiar cualquier SnackBar existente y mostrar el nuevo
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
+        scaffoldMessenger.hideCurrentSnackBar();
         
         // Mostrar mensaje del backend
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(response.messageDetail ?? response.message ?? 
-            'Guías despachadas correctamente'),
-          backgroundColor: Colors.green,
-        ));
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Container(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                '✅ ${response.message}\nGuías actualizadas a estado "Listo para Entrega"',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(8),
+          ),
+        );
 
         // Limpiar selección y recargar lista
         provider.clearSelectedGuides();
@@ -81,6 +130,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
       } else {
         // Feedback de error
         HapticFeedback.heavyImpact();
+          await AppSounds.error();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(response.messageDetail ?? response.message ?? 
             'Error al despachar guías'),
@@ -89,6 +139,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
       }
     } catch (e) {
       if (!mounted) return;
+          await AppSounds.error();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Error inesperado: $e'),
         backgroundColor: Colors.red,
@@ -103,6 +154,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
 
+    // Ya no exigimos subcourier al escanear; se valida al procesar
+
     await _scanController.processScan(() async {
       try {
         // Buscar primero en la lista actual
@@ -111,9 +164,9 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             .where((g) => g.code == cleanGuide)
             .toList();
 
-        // Si la guía ya está en la lista, usarla
+        // Si la guía ya está en la lista, usarla sin validar subcourier aquí
         if (localMatch.isNotEmpty) {
-          SystemSound.play(SystemSoundType.click);
+          await AppSounds.success();
           provider.updateGuideUiState(cleanGuide, 'scanned');
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
@@ -135,7 +188,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         final exactMatch = guides.where((g) => g.code == cleanGuide).firstOrNull;
         
         if (exactMatch != null) {
-          SystemSound.play(SystemSoundType.click);
+          // No validar subcourier aquí, se hará al procesar
+          await AppSounds.success();
           provider.updateGuideUiState(cleanGuide, 'scanned');
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
@@ -148,10 +202,11 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         } else {
           HapticFeedback.heavyImpact();
           if (mounted) {
+await AppSounds.error();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  '❌ La guía $cleanGuide no está disponible para despacho',
+                  'La guía $cleanGuide no está disponible para despacho',
                   style: const TextStyle(color: Colors.white),
                 ),
                 backgroundColor: Colors.red,
@@ -162,12 +217,19 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
 
         if (mounted) {
           _controller.clear();
+          // Mantener el foco
+          Future.microtask(() {
+            if (!_focusNode.hasFocus) {
+              _focusNode.requestFocus();
+            }
+          });
         }
       } catch (e) {
         if (mounted) {
+await AppSounds.error();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('❌ Error al procesar la guía'),
+              content: Text('Error al procesar la guía'),
               backgroundColor: Colors.red,
             ),
           );
@@ -184,6 +246,13 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<GuideProvider>();
+
+    // Asegurar que siempre tenemos el foco
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
 
     return Column(
       mainAxisSize: MainAxisSize.min,

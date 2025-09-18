@@ -12,6 +12,13 @@ class HttpService {
   final String baseUrl;
   String? _token;
   Function()? onSessionExpired;
+  Function()? onTokenRefreshNeeded;
+
+  /// Callback para refrescar el token cuando sea necesario
+  Function()? get tokenRefreshCallback => onTokenRefreshNeeded;
+  set tokenRefreshCallback(Function()? callback) {
+    onTokenRefreshNeeded = callback;
+  }
 
   /// Sanitiza el cuerpo para logs, removiendo 'message' y preservando 'messageDetail'
   /// Solo aplica para endpoints de despacho en aduana y creación/listado de cubos
@@ -40,6 +47,7 @@ class HttpService {
   HttpService({
     required this.baseUrl,
     this.onSessionExpired,
+    this.onTokenRefreshNeeded,
   });
 
   /// Establece el token de autenticación
@@ -59,10 +67,59 @@ class HttpService {
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    if (_token != null) 'Authorization': (_token!.startsWith('Bearer ') ? _token! : 'Bearer $_token!'),
+    // setToken ya normaliza el formato a 'Bearer <token>' si fuese necesario
+    if (_token != null) 'Authorization': _token!,
   };
 
   /// Realiza una petición GET
+  Future<http.Response> _withAuthRetry(
+    Future<http.Response> Function() send,
+    String requestUrl, {
+    bool suppressAuthHandling = false,
+  }) async {
+    try {
+      var response = await send();
+      
+      // Si no es 401 o se suprime el manejo de auth, retornar directamente
+      if (response.statusCode != 401 || suppressAuthHandling) {
+        return response;
+      }
+
+      AppLogger.log(
+        'Received 401 - Attempting token refresh and retry',
+        source: 'HttpService'
+      );
+
+      // Intentar refrescar token
+      if (onTokenRefreshNeeded != null) {
+        final refreshed = await onTokenRefreshNeeded!();
+        if (refreshed) {
+          AppLogger.log(
+            'Token refreshed, retrying request',
+            source: 'HttpService'
+          );
+          // Reintento con el nuevo token
+          return await send();
+        }
+      }
+
+      // Si no hay callback de refresh o falló, proceder con 401
+      AppLogger.log(
+        'Token refresh failed or not available',
+        source: 'HttpService'
+      );
+      return response;
+
+    } catch (e) {
+      AppLogger.error(
+        'Error in auth retry mechanism',
+        error: e,
+        source: 'HttpService'
+      );
+      rethrow;
+    }
+  }
+
   Future<ApiResponse<T>> get<T>(
     String path,
     T Function(Map<String, dynamic> json) fromJson, {
@@ -82,8 +139,12 @@ class HttpService {
       );
 
       final client = http.Client();
-      final response = await client.get(uri, headers: _headers)
-        .timeout(const Duration(seconds: 30));
+      final response = await _withAuthRetry(
+        () => client.get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 30)),
+        uri.toString(),
+        suppressAuthHandling: suppressAuthHandling,
+      );
       AppLogger.apiCall(
         uri.toString(),
         method: 'GET',
@@ -205,11 +266,15 @@ class HttpService {
 
     try {
       final client = http.Client();
-      final response = await client.post(
-        Uri.parse(baseUrl + path),
-        headers: _headers,
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 30));
+      final response = await _withAuthRetry(
+        () => client.post(
+          Uri.parse(baseUrl + path),
+          headers: _headers,
+          body: jsonEncode(data),
+        ).timeout(const Duration(seconds: 30)),
+        baseUrl + path,
+        suppressAuthHandling: suppressAuthHandling,
+      );
 
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       final sanitizedBody = _sanitizeBodyForLog(baseUrl + path, response.body);
@@ -316,11 +381,15 @@ class HttpService {
 
     try {
       final client = http.Client();
-      final response = await client.put(
-        Uri.parse(baseUrl + path),
-        headers: _headers,
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 30));
+      final response = await _withAuthRetry(
+        () => client.put(
+          Uri.parse(baseUrl + path),
+          headers: _headers,
+          body: jsonEncode(data),
+        ).timeout(const Duration(seconds: 30)),
+        baseUrl + path,
+        suppressAuthHandling: suppressAuthHandling,
+      );
 
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       developer.log('Response Body: ${response.body}', name: 'HttpService');

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'core/observers/auth_lifecycle_observer.dart';
 import 'core/config/api_config.dart';
 import 'core/services/http_service.dart';
 import 'core/services/storage_service.dart';
@@ -34,18 +35,24 @@ void main() {
 
   // Mostrar error overlay en debug
   ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 16),
-            Text(
-              'Error: ${details.exception}',
-              style: const TextStyle(color: Colors.red),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Material(
+        child: Container(
+          color: Colors.white,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'Error: ${details.exception}',
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -61,18 +68,21 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final StorageService storageService;
   late final HttpService httpService;
   late final AuthService authService;
   late final GuideService guideService;
   late final TransportCubeService transportCubeService;
   Timer? _tokenRefreshTimer;
+  AuthLifecycleObserver? _authObserver;
 
   @override
   void initState() {
     super.initState();
     _initializeServices();
+    // Registrar observer de ciclo de vida global
+    WidgetsBinding.instance.addObserver(this);
   }
 
   void _initializeServices() {
@@ -80,17 +90,22 @@ class _MyAppState extends State<MyApp> {
     storageService = StorageService();
     httpService = HttpService(
       baseUrl: ApiConfig.baseUrl,
-      // Deshabilitamos el logout automático - el usuario debe cerrar sesión manualmente
-      // onSessionExpired: () {
-      //   // Logout automático deshabilitado
-      // },
+      onSessionExpired: () {
+        // Por ahora no forzamos logout automático
+        debugPrint('Session expired - skipping auto logout');
+      },
     );
     
     // Servicios de negocio
     authService = AuthService(httpService, storageService);
     guideService = GuideService(httpService);
     transportCubeService = TransportCubeService(httpService);
-
+    
+    // Configurar callback de refresh token después de tener el authService
+    httpService.tokenRefreshCallback = () async {
+      debugPrint('Token refresh needed - attempting refresh');
+      return await authService.refreshTokenIfNeeded();
+    };
     // Verificación/refresh periódico del token
     _startTokenRefreshTimer();
   }
@@ -109,12 +124,31 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     _tokenRefreshTimer?.cancel();
+    if (_authObserver != null) {
+      WidgetsBinding.instance.removeObserver(_authObserver!);
+    }
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Inicializar observer de auth cuando el context esté disponible
+    _authObserver ??= AuthLifecycleObserver(context);
+    WidgetsBinding.instance.addObserver(_authObserver!);
+  }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('App resumed - checking auth state');
+      unawaited(authService.refreshTokenIfNeeded());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>(
