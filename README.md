@@ -76,14 +76,14 @@ lib/
 
 ##  Estado Actual
 
-### Implementado ✅
+### Implementado 
 - Estructura base de modelos y enums
 - Integración con API
 - Flujo básico de estados
 - UI base con componentes reusables
 - Manejo de errores básico
 
-### En Progreso ⚠️
+### En Progreso 
 - Validación de secuencia de estados
 - Manejo de errores avanzado
 - Optimización de filtros
@@ -97,7 +97,7 @@ lib/
 4. Mejora de feedback visual
 5. Optimización de rendimiento
 
-## 🔧 Notas Técnicas
+##  Notas Técnicas
 
 ### Patrones Implementados
 - Repository Pattern (Servicios)
