@@ -21,65 +21,82 @@ class WarehouseReceptionScreen extends StatelessWidget {
       ),
       drawer: const AppDrawer(),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Indicador de carga
-            Consumer<GuideProvider>(
-              builder: (context, provider, _) => provider.isLoading
-                  ? const LinearProgressIndicator()
-                  : const SizedBox.shrink(),
-            ),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Indicador de carga
+              Consumer<GuideProvider>(
+                builder: (context, provider, _) => provider.isLoading
+                    ? const LinearProgressIndicator()
+                    : const SizedBox.shrink(),
+              ),
 
-            // Caja de escaneo
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Consumer<GuideProvider>(
-                builder: (context, provider, _) {
-                  return WarehouseReceptionScanBox(
-                    onComplete: (scanned) async {
-                      if (scanned.isEmpty) return;
+              // Caja de escaneo
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Consumer<GuideProvider>(
+                  builder: (context, provider, _) {
+                    return WarehouseReceptionScanBox(
+                      onComplete: (scanned) async {
+                        if (scanned.isEmpty) return;
 
-                      // Actualizar directamente a ReceivedInLocalWarehouse
-                      final request = UpdateGuideStatusRequest(
-                        guides: scanned,
-                        newStatus: TrackingStateType.receivedInLocalWarehouse,
-                      );
+                        // Actualizar directamente a ReceivedInLocalWarehouse
+                        final request = UpdateGuideStatusRequest(
+                          guides: scanned,
+                          newStatus:
+                          TrackingStateType.receivedInLocalWarehouse,
+                        );
 
-                      final response = await provider.updateGuideStatus(request);
-                      
-                      if (!context.mounted) return;
+                        final response =
+                        await provider.updateGuideStatus(request);
 
-                      // Mostrar mensaje del backend (éxito o error)
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(response.messageDetail ?? response.message ?? 
-                          (response.isSuccessful ? 'Guías actualizadas correctamente' : 'Error al actualizar guías')),
-                        backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
-                      ));
+                        if (!context.mounted) return;
 
-                      // Si fue exitoso, recargar la lista
-                      if (response.isSuccessful) {
+                        // Mostrar mensaje del backend con más detalle
+                        // Siempre mostrar el messageDetail del servidor si existe
+                        final serverMessage = response.messageDetail ?? response.message ?? '';
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              serverMessage.isNotEmpty
+                                ? serverMessage
+                                : response.isSuccessful
+                                    ? 'Se actualizaron ${scanned.length} guías correctamente'
+                                    : 'Error al actualizar las guías',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            backgroundColor: !response.isSuccessful ? Colors.red : Colors.green,
+                            duration: serverMessage.isNotEmpty
+                                ? const Duration(seconds: 10)
+                                : const Duration(seconds: 4),
+                          ),
+                        );
+
+                        // Incluso con errores parciales, recargar para mostrar las actualizadas
                         await provider.loadGuides(
                           page: 1,
                           pageSize: 50,
                           status: TrackingStateType.transitToWarehouse,
                         );
-                      }
-                    },
-                  );
-                },
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
 
-            // Lista de guías
-            const Expanded(
-              child: WarehouseReceptionListScreen(
-                title: 'Recepción en Bodega',
-                status: TrackingStateType.transitToWarehouse,  // Muestra guías en tránsito a bodega
-                showHistoric: false,
-                hideValidated: true,
+              // Lista de guías
+              const SizedBox(
+                height: 300, // Altura fija para la lista
+                child: WarehouseReceptionListScreen(
+                  title: 'Recepción en Bodega',
+                  status: TrackingStateType.transitToWarehouse,
+                  showHistoric: false,
+                  hideValidated: true,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

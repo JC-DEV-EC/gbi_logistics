@@ -5,7 +5,13 @@ import '../../../core/models/api_response.dart';
 import '../services/guide_service.dart';
 import '../models/operation_models.dart';
 
-/// Provider para manejar operaciones con guías y sus estados
+/// Provider para manejar operaciones con guías y sus estados.
+/// 
+/// Proporciona funcionalidades para:
+/// - Cargar y buscar guías por estado
+/// - Gestionar estados de UI (validadas/despachadas)
+/// - Mantener selección de guías y subcourier
+/// - Gestionar el filtro de estado en Despacho a Cliente
 class GuideProvider extends ChangeNotifier {
   final GuideService _guideService;
 
@@ -22,6 +28,9 @@ class GuideProvider extends ChangeNotifier {
   int? _selectedSubcourierId;
   final Set<String> _selectedGuides = {};
 
+  // Estado actual del filtro en Despacho a Cliente
+  String _clientDispatchFilterState = 'ReceivedInLocalWarehouse';
+
   // Constructor
   GuideProvider(this._guideService) {
     _loadSavedStates();
@@ -35,6 +44,7 @@ class GuideProvider extends ChangeNotifier {
   Map<String, String> get guideUiStates => _guideUiStates;
   int? get selectedSubcourierId => _selectedSubcourierId;
   Set<String> get selectedGuides => Set.unmodifiable(_selectedGuides);
+  String get clientDispatchFilterState => _clientDispatchFilterState;
 
   // Métodos de subcourier
   void setSelectedSubcourier(int id) {
@@ -104,9 +114,10 @@ class GuideProvider extends ChangeNotifier {
     required String status,
     String? guideCode,
     bool hideValidated = false,
+    bool bypassLoadingGuard = false,
   }) async {
     try {
-      if (_isLoading) {
+      if (_isLoading && !bypassLoadingGuard) {
         AppLogger.log('Omitiendo carga: ya hay una en proceso', source: 'GuideProvider');
         return;
       }
@@ -128,11 +139,22 @@ class GuideProvider extends ChangeNotifier {
         if (hideValidated) {
           _guides = _guides
               .where((guide) => 
-                !_guideUiStates.containsKey(guide.code) || 
+                // Filtrar guías ya validadas/despachadas
+                (!_guideUiStates.containsKey(guide.code) || 
                 (_guideUiStates[guide.code] != 'validated' && 
-                 _guideUiStates[guide.code] != 'dispatched'))
+                 _guideUiStates[guide.code] != 'dispatched')))
               .toList();
         }
+
+        // Ordenar la lista para tener primero las guías DispatchedFromCustomsWithOutCube
+        _guides.sort((a, b) {
+          if (a.stateLabel == 'DispatchedFromCustomsWithOutCube' && b.stateLabel != 'DispatchedFromCustomsWithOutCube') {
+            return -1;
+          } else if (a.stateLabel != 'DispatchedFromCustomsWithOutCube' && b.stateLabel == 'DispatchedFromCustomsWithOutCube') {
+            return 1;
+          }
+          return 0;
+        });
 
         _totalGuides = response.content!.totalRegister;
         _error = null;
@@ -262,11 +284,12 @@ class GuideProvider extends ChangeNotifier {
       final response = await _guideService.dispatchToClient(request);
 
       if (response.isSuccessful) {
-        // Limpiar los estados y selecciones de las guías despachadas
+        // Limpiar los estados, selecciones y el subcourier seleccionado
         for (final guide in request.guides) {
           _guideUiStates.remove(guide);
           _selectedGuides.remove(guide);
         }
+        _selectedSubcourierId = null;  // Limpiar subcourier seleccionado
         
         // Recargar la lista
         await loadGuides(
@@ -274,6 +297,7 @@ class GuideProvider extends ChangeNotifier {
           pageSize: 50,
           status: 'ReceivedInLocalWarehouse',
           hideValidated: false,
+          bypassLoadingGuard: true,
         );
       } else if (response.message?.contains('sesión ha expirado') ?? false) {
         _guides.clear();
@@ -351,6 +375,14 @@ class GuideProvider extends ChangeNotifier {
   void clearSelectedGuides() {
     if (_selectedGuides.isNotEmpty) {
       _selectedGuides.clear();
+      notifyListeners();
+    }
+  }
+
+  /// Actualiza el filtro de estado para Despacho a Cliente
+  void setClientDispatchFilterState(String state) {
+    if (_clientDispatchFilterState != state) {
+      _clientDispatchFilterState = state;
       notifyListeners();
     }
   }

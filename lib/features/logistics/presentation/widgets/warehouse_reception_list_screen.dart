@@ -4,6 +4,7 @@ import '../../providers/guide_provider.dart';
 import '../helpers/error_helper.dart';
 import '../helpers/date_helper.dart';
 import 'loading_indicator.dart';
+import '../../models/operation_models.dart';
 
 /// Widget especializado para mostrar lista de guías en recepción de bodega
 class WarehouseReceptionListScreen extends StatefulWidget {
@@ -31,19 +32,20 @@ class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScr
     // Cargar automáticamente según estado y modo
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Siempre cargar para TransitToWarehouse (Recepción en Bodega)
-      if (widget.status == 'TransitToWarehouse') {
+      // Al estar en tránsito, las guías deberían estar en estado DispatchedFromCustoms
+      if (widget.status == TrackingStateType.transitToWarehouse) {
         _loadGuides();
       }
     });
   }
 
   Future<void> _loadGuides() async {
-    await context.read<GuideProvider>().loadGuides(
-      page: 1,
-      pageSize: 50,
-      status: widget.status,
-      hideValidated: widget.hideValidated,
-    );
+      await context.read<GuideProvider>().loadGuides(
+        page: 1,
+        pageSize: 50,
+        status: TrackingStateType.transitToWarehouse,
+        hideValidated: widget.hideValidated,
+      );
   }
 
   @override

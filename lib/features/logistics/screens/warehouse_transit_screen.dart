@@ -129,7 +129,7 @@ class WarehouseTransitScreen extends StatelessWidget {
         final guidesUpdate = await context.read<GuideProvider>().updateGuideStatus(
           UpdateGuideStatusRequest(
             guides: guideCodes.toList(),
-            newStatus: 'TransitToWarehouse',
+            newStatus: TrackingStateType.transitToWarehouse,  // valor real: 'TransitToWarehouse'
           ),
         );
 

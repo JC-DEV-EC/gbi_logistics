@@ -13,6 +13,22 @@ class AuthService {
     _restoreToken();
   }
 
+  Future<LoginResponse?> restoreSession() async {
+    final hasSession = await _storage.hasActiveSession();
+    final token = await _storage.getToken();
+    final loginData = await _storage.getLoginData();
+    
+    // Solo restaurar si el usuario no cerró sesión explícitamente
+    if (hasSession && token != null) {
+      _http.setToken(token);
+      
+      if (loginData != null) {
+        return LoginResponse.fromJson(loginData);
+      }
+    }
+    return null;
+  }
+
   Future<void> _restoreToken() async {
     final token = await _storage.getToken();
     if (token != null) {
@@ -31,8 +47,11 @@ class AuthService {
 
       if (response.isSuccessful && response.content?.token != null) {
         final token = response.content!.token!;
+        final loginData = response.content!;
+        // Guardar token y datos de login
         _http.setToken(token);
         await _storage.setToken(token);
+        await _storage.setLoginData(loginData.toJson());
       } else if (!response.isSuccessful) {
         return ApiResponse.error(
           message: response.messageDetail ?? response.message,
@@ -51,7 +70,7 @@ class AuthService {
 
   Future<void> logout() async {
     _http.setToken(null);
-    await _storage.removeToken();
+    await _storage.clearSession();
   }
 
   Future<bool> hasValidToken() async {

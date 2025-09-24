@@ -73,6 +73,14 @@ class AppDrawer extends StatelessWidget {
           ),
           const Divider(height: 1),
           ListTile(
+            leading: const Icon(Icons.qr_code_scanner),
+            title: const Text('Consultar Guía'),
+            onTap: () {
+              Navigator.pushReplacementNamed(context, '/guide-scanner');
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Cerrar Sesión'),
             onTap: () {

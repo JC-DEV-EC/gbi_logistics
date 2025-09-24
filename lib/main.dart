@@ -23,6 +23,8 @@ import 'features/logistics/screens/warehouse_transit_details_screen.dart';
 import 'features/logistics/screens/warehouse_reception_details_screen.dart';
 import 'features/logistics/screens/client_dispatch_details_screen.dart';
 import 'features/logistics/screens/new_transport_cube_screen.dart';
+import 'features/logistics/services/guide_details_service.dart';
+import 'features/logistics/screens/guide_scanner_details_screen.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -74,6 +76,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final AuthService authService;
   late final GuideService guideService;
   late final TransportCubeService transportCubeService;
+  late final GuideDetailsService guideDetailsService;
   Timer? _tokenRefreshTimer;
   AuthLifecycleObserver? _authObserver;
 
@@ -100,6 +103,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     authService = AuthService(httpService, storageService);
     guideService = GuideService(httpService);
     transportCubeService = TransportCubeService(httpService);
+    guideDetailsService = GuideDetailsService(httpService);
     
     // Configurar callback de refresh token después de tener el authService
     httpService.tokenRefreshCallback = () async {
@@ -159,6 +163,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
         ChangeNotifierProvider<TransportCubeProvider>(
           create: (_) => TransportCubeProvider(transportCubeService)..loadCubes(),
+        ),
+        Provider<GuideDetailsService>(
+          create: (_) => guideDetailsService,
         ),
       ],
       child: MaterialApp(
@@ -262,6 +269,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       return const DashboardScreen();
                   }
                 },
+              );
+
+            case '/guide-scanner':
+              return MaterialPageRoute(
+                builder: (_) => const GuideScannerDetailsScreen(),
               );
             }
 

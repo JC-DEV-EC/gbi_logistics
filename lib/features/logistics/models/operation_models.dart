@@ -162,6 +162,7 @@ class ChangeCubeGuideRequest {
 /// Response paginada para guías
 /// Estados de tracking del backend
 class TrackingStateType {
+  /// Estados de tracking según el API
   static const String readyForShipment = 'ReadyForShipment';
   static const String inAirline = 'InAirline';
   static const String internationalTransit = 'InternationalTransit';
@@ -190,6 +191,7 @@ class TrackingStateType {
   static const String inInspectionProcess = 'InInspectionProcess';
   static const String waitingForWeighing = 'WaitingForWeighing';
   static const String dispatchRequested = 'DispatchRequested';
+  static const String dispatchedFromCustomsWithOutCube = 'DispatchedFromCustomsWithOutCube';
 }
 
 class GetGuidesPaginatedResponse {

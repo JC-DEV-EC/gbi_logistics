@@ -102,4 +102,27 @@ class LoginResponse {
           : DashboardData(guideStadistics: []),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'content': {
+      'token': token,
+      'personFirstName': personFirstName,
+      'personLastName': personLastName,
+      'entityName': entityName,
+      'subcouriersInformation': subcouriersInformation
+          .map((e) => {
+            'id': e.id,
+            'name': e.name,
+          })
+          .toList(),
+      'dashboardData': {
+        'guideStadistics': dashboardData.guideStadistics
+            .map((e) => {
+              'status': e.status,
+              'count': e.count,
+            })
+            .toList(),
+      },
+    },
+  };
 }

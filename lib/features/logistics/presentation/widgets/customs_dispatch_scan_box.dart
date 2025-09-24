@@ -4,7 +4,7 @@ import '../controllers/scan_controller.dart';
 
 /// Widget para escaneo de guías en despacho en aduana
 class CustomsDispatchScanBox extends StatefulWidget {
-  final Function(List<String>) onComplete;
+  final Function(List<String>, bool createCube) onComplete;
 
   const CustomsDispatchScanBox({
     super.key,
@@ -58,19 +58,26 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
     });
   }
 
-  void _complete() {
-    if (_scannedGuides.isNotEmpty) {
-      widget.onComplete(_scannedGuides.toList());
-      setState(() {
-        _scannedGuides.clear();
-      });
-      // Mantener el foco
-      Future.microtask(() {
-        if (!_focusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
-      });
-    }
+  Future<void> _complete({required bool createCube}) async {
+    if (_scannedGuides.isEmpty) return;
+
+    // Procesar todas las guías en un solo request
+    final guides = _scannedGuides.toList();
+    
+    // Llamar al callback y esperar la respuesta
+    widget.onComplete(guides, createCube);
+
+    // Limpiar la lista de guías escaneadas
+    setState(() {
+      _scannedGuides.clear();
+    });
+
+    // Mantener el foco del escáner
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   void _removeGuide(String guide) {
@@ -127,11 +134,28 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
           if (_scannedGuides.isNotEmpty) ...[
             const SizedBox(height: 16),
             
-            // Botón de crear cubo
-            FilledButton.icon(
-              onPressed: _complete,
-              icon: const Icon(Icons.add_box),
-              label: Text('Crear Cubo con ${_scannedGuides.length} guías'),
+            // Botones de acción
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _complete(createCube: true),
+                    icon: const Icon(Icons.add_box),
+                    label: Text('Crear Cubo, (${_scannedGuides.length} guías)'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _complete(createCube: false),
+                    icon: const Icon(Icons.update),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                    ),
+                    label: Text('Actualizar estado (${_scannedGuides.length})'),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 16),

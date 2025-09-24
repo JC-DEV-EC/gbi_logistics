@@ -103,38 +103,45 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         final scaffoldMessenger = ScaffoldMessenger.of(context);
         scaffoldMessenger.hideCurrentSnackBar();
         
-        // Mostrar mensaje del backend
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text(
-                '✅ ${response.message}\nGuías actualizadas a estado "Listo para Entrega"',
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(8),
-          ),
-        );
+          // Mostrar mensaje del backend
+                        final serverMessage = response.messageDetail ?? response.message ?? '';
+                        final baseMessage = 'Guías actualizadas a estado "Listo para Entrega"';
 
-        // Limpiar selección y recargar lista
+                        scaffoldMessenger.showSnackBar(
+                          SnackBar(
+                            content: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                serverMessage.isNotEmpty
+                                  ? '$serverMessage\n$baseMessage'
+                                  : '${selectedGuides.length} $baseMessage',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                            backgroundColor: Colors.green,
+                            duration: serverMessage.isNotEmpty
+                                ? const Duration(seconds: 10)
+                                : const Duration(seconds: 4),
+                            behavior: SnackBarBehavior.floating,
+                            margin: const EdgeInsets.all(8),
+                          ),
+                        );
+
+        // Limpiar selección y quitar de la lista actual las guías despachadas
+        final dispatchedSet = selectedGuides.toSet();
         provider.clearSelectedGuides();
-        await provider.loadGuides(
-          page: 1,
-          pageSize: 50,
-          status: 'ReceivedInLocalWarehouse',
-        );
+        // Remover visualmente las guías ya despachadas de la lista actual
+        final remaining = provider.guides.where((g) => !dispatchedSet.contains(g.code)).toList();
+        provider.setGuides(remaining);
       } else {
         // Feedback de error
         HapticFeedback.heavyImpact();
           await AppSounds.error();
+        final errorMessage = response.messageDetail ?? response.message ?? 'Error al despachar guías';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(response.messageDetail ?? response.message ?? 
-            'Error al despachar guías'),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 10),
         ));
       }
     } catch (e) {
@@ -178,14 +185,13 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         }
 
         // Si no está en la lista, buscar en el backend usando searchQuery
-        final guides = await provider.searchGuides(
-          page: 1,
-          pageSize: 50,
-          status: 'ReceivedInLocalWarehouse',  // TODO: Usar TrackingStateType cuando se resuelva el ciclo de importación
-          guideCode: cleanGuide,
+        final selectedState = context.read<GuideProvider>().clientDispatchFilterState;
+        final response = await provider.searchGuide(
+          cleanGuide,
+          status: selectedState,  // Usar solo el estado actualmente seleccionado
         );
 
-        final exactMatch = guides.where((g) => g.code == cleanGuide).firstOrNull;
+        final exactMatch = response.content;
         
         if (exactMatch != null) {
           // No validar subcourier aquí, se hará al procesar
@@ -206,8 +212,8 @@ await AppSounds.error();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'La guía $cleanGuide no está disponible para despacho',
-                  style: const TextStyle(color: Colors.white),
+                  response.messageDetail ?? response.message ?? 'La guía no está disponible para despacho',
+                  style: const TextStyle(fontSize: 13, color: Colors.white),
                 ),
                 backgroundColor: Colors.red,
               ),

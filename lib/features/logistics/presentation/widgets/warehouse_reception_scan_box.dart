@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../models/operation_models.dart';
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
 import '../../services/app_sounds.dart';
@@ -49,7 +50,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
         // Buscar la guía y validar su estado
         final response = await context.read<GuideProvider>().searchGuide(
           cleanGuide,
-          status: 'TransitToWarehouse', // Buscar solo guías en tránsito
+          status: TrackingStateType.transitToWarehouse,  // Buscar solo guías en tránsito
         );
 
         if (!response.isSuccessful || response.content == null) {
@@ -100,19 +101,84 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
     });
   }
 
-  void _complete() {
-    if (_scannedGuides.isNotEmpty) {
-      widget.onComplete(_scannedGuides.toList());
-      setState(() {
-        _scannedGuides.clear();
-      });
-      // Mantener el foco
-      Future.microtask(() {
-        if (!_focusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
-      });
+  Future<void> _complete() async {
+    if (_scannedGuides.isEmpty) return;
+
+    final provider = context.read<GuideProvider>();
+    final guides = _scannedGuides.toList();
+
+    // Hacer un solo request con todas las guías
+    final request = UpdateGuideStatusRequest(
+      guides: guides,
+      newStatus: TrackingStateType.receivedInLocalWarehouse,
+    );
+
+    final response = await provider.updateGuideStatus(request);
+
+    if (!mounted) return;
+
+    // Analizar la respuesta para identificar guías que no se pudieron actualizar
+    final Set<String> failed = {};
+    final detail = (response.messageDetail ?? response.message ?? '').toString();
+    if (detail.isNotEmpty) {
+      // Si el mensaje menciona guías específicas, extraerlas
+      final regex = RegExp(r'\b\d{5,}\b');
+      final failedGuides = regex.allMatches(detail).map((m) => m.group(0)!).toSet();
+      failed.addAll(failedGuides);
     }
+
+    // Las guías que no están en failed son las que se procesaron con éxito
+    final succeeded = guides.where((code) => !failed.contains(code)).toList();
+
+    // Enviar al callback solo las guías exitosas
+    if (succeeded.isNotEmpty) {
+      widget.onComplete(succeeded);
+    }
+
+    // Mantener en pantalla solo las guías que fallaron
+    setState(() {
+      _scannedGuides
+        ..clear()
+        ..addAll(failed);
+    });
+
+    // Mostrar resumen con detalles
+    final total = guides.length;
+    final okCount = succeeded.length;
+    final failCount = failed.length;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              failCount == 0
+                ? '✅ Se actualizaron las $total guías'
+                : '⚠️ $okCount guías actualizadas, $failCount pendientes',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (failCount > 0 && detail.isNotEmpty) ...[  
+              const SizedBox(height: 4),
+              Text(
+                detail,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
+          ],
+        ),
+        backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
+        duration: Duration(seconds: failCount > 0 ? 8 : 4),  // Más tiempo si hay fallos
+      ),
+    );
+
+    // Mantener el foco del escáner
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   void _removeGuide(String guide) {

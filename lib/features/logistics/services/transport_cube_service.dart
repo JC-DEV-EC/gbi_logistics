@@ -106,7 +106,7 @@ class TransportCubeService {
     ChangeTranportCubesStateRequest request,
   ) async {
     developer.log(
-      'Sending state change request:\n- Cube IDs: ${request.transportCubeIds.join(", ")}\n- New state: ${request.newState}',
+      'Sending state change request:\\n- Cube IDs: ${request.transportCubeIds.join(", ")}\\n- New state: ${request.newState}',
       name: 'TransportCubeService',
     );
 
@@ -114,6 +114,7 @@ class TransportCubeService {
       '${ApiEndpoints.changeTransportCubeState}?version=${ApiConfig.version}',
       request.toJson(),
       (_) => null,
+      suppressAuthHandling: true,  // Evitar manejo automático de auth
     );
 
     if (!response.isSuccessful) {

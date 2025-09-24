@@ -23,39 +23,37 @@ class GuideService {
       queryParams: {
         'Page': page,
         'ItemsByPage': pageSize,
-        'Status': status,  // API espera 'Status' para guías
+        'Status': status,  // API espera 'Status' para guías (ya viene codificado si es necesario)
         if (guideCode != null) 'GuideCode': guideCode,
       },
     );
   }
 
   /// Actualiza el estado de una guía
+  /// Actualiza el estado de una o más guías
   Future<ApiResponse<void>> updateGuideStatus(UpdateGuideStatusRequest request, {
-    bool suppressAuthHandling = true,  // Siempre suprimir manejo de autenticación
+    bool suppressAuthHandling = true,
   }) async {
+    if (request.guides.isEmpty) {
+      return ApiResponse.error(message: 'No hay guías para actualizar');
+    }
+
     AppLogger.log(
-      'Calling updateGuideStatus endpoint:\n- Guides: ${request.guides}\n- Status: ${request.newStatus}',
+      'Actualizando estado de ${request.guides.length} guías a ${request.newStatus}',
       source: 'GuideService'
     );
 
-    // Primero validar que el token siga siendo válido
-    final validateResponse = await _http.get<dynamic>(
-      ApiEndpoints.dashboardData,
-      (json) => json,
-      suppressAuthHandling: true,
-      queryParams: {'version': '1.0'},
-    );
-
-    // Si la validación falló, continuar con la operación normal
     final response = await _http.post<void>(
       ApiEndpoints.updateGuideStatus,
       request.toJson(),
       (_) => null,
-      suppressAuthHandling: true, // Siempre suprimir manejo de autenticación
+      suppressAuthHandling: true,
     );
 
     AppLogger.log(
-      'updateGuideStatus response:\n- Success: ${response.isSuccessful}\n- Message: ${response.message}',
+      'Resultado de actualización:\n'
+      '- Exitoso: ${response.isSuccessful}\n'
+      '- Mensaje: ${response.messageDetail ?? response.message}',
       source: 'GuideService'
     );
 

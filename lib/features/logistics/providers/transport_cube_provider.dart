@@ -261,15 +261,7 @@ final request = op.ChangeTranportCubesStateRequest(
         return true;
       }
       // Verificar si es error de sesión
-      if (response.message?.contains('sesión ha expirado') ?? false) {
-        _errorMessage = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
-        // Limpiar estado
-        _cubes.clear();
-        _selectedCubeDetails = null;
-        _selectedCubes.clear();
-      } else {
-        _errorMessage = response.message ?? 'No se pudo actualizar el estado';
-      }
+      _errorMessage = response.message ?? 'No se pudo actualizar el estado';
       return false;
     } catch (e) {
       _errorMessage = 'No se pudo actualizar el estado';

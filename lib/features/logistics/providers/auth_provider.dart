@@ -13,7 +13,32 @@ class AuthProvider extends ChangeNotifier {
   LoginResponse? _loginData;
   bool _isAuthenticated = false;
 
-  AuthProvider(this._authService);
+  AuthProvider(this._authService) {
+    // Intentar restaurar sesión al inicializar
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    try {
+      final loginData = await _authService.restoreSession();
+      if (loginData != null) {
+        _loginData = loginData;
+        _isAuthenticated = true;
+        notifyListeners();
+        
+        // Validar que el token aún sea válido, si no lo es, limpiar sin marcar la sesión como cerrada manualmente
+        final isValid = await _authService.hasValidToken();
+        if (!isValid) {
+          _isAuthenticated = false;
+          _loginData = null;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error restoring session: $e');
+      await logout();
+    }
+  }
 
   // Getters
   bool get isLoading => _isLoading;
@@ -74,11 +99,14 @@ class AuthProvider extends ChangeNotifier {
 
   /// Cierra la sesión
   Future<void> logout() async {
-    await _authService.logout();
-    _isAuthenticated = false;
-    _loginData = null;
-    _error = null;
-    notifyListeners();
+    try {
+      await _authService.logout();
+    } finally {
+      _isAuthenticated = false;
+      _loginData = null;
+      _error = null;
+      notifyListeners();
+    }
   }
 
   Future<void> checkAuthState() async {

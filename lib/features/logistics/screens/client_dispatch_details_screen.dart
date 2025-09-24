@@ -118,6 +118,7 @@ class _ClientDispatchDetailsScreenState
             ),
             const SizedBox(height: 16),
             Autocomplete<int>(
+              key: ValueKey(guideProvider.selectedSubcourierId),
               fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
                 void _showAllOptions() {
                   if (!focusNode.hasFocus) {
@@ -356,7 +357,7 @@ class _ClientDispatchDetailsScreenState
         await context.read<GuideProvider>().loadGuides(
           page: 1,
           pageSize: 50,
-          status: 'ReceivedInLocalWarehouse',
+          status: 'DispatchedFromCustomsWithOutCube,ReceivedInLocalWarehouse',
           hideValidated: false,
         );
 
@@ -373,7 +374,10 @@ class _ClientDispatchDetailsScreenState
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Guías despachadas exitosamente'),
+                      Text(
+                        response.messageDetail ?? response.message ?? 'Guías despachadas exitosamente',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       Text(
                         'Las guías están listas para entrega al cliente final',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -387,6 +391,8 @@ class _ClientDispatchDetailsScreenState
             ),
             duration: const Duration(seconds: 4),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(8),
           ),
         );
       } else {

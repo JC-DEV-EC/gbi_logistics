@@ -16,22 +16,32 @@ class ClientDispatchListScreen extends StatefulWidget {
 }
 
 class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
-  static const String status = 'ReceivedInLocalWarehouse';  // TODO: Usar TrackingStateType cuando se resuelva el ciclo de importación
+  // Estados permitidos para despacho a cliente y sus etiquetas
+  static const Map<String, String> stateLabels = {
+    'ReceivedInLocalWarehouse': 'Recibido en Bodega',
+    'DispatchedFromCustomsWithOutCube': 'Despachado sin Cubo'
+  };
+
+  String _selectedState = 'ReceivedInLocalWarehouse';  // Estado inicial
 
   @override
   void initState() {
     super.initState();
     // Cargar guías al inicio y cuando se monta el widget
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Asegurar que el provider tenga el estado inicial correcto
+      context.read<GuideProvider>().setClientDispatchFilterState(_selectedState);
       _loadGuides();
     });
   }
 
   Future<void> _loadGuides() async {
+    // Cargar solo las guías del estado seleccionado
     await context.read<GuideProvider>().loadGuides(
       page: 1,
       pageSize: 50,
-      status: status,
+      // Usar el estado seleccionado
+      status: _selectedState,
       hideValidated: false,
     );
   }
@@ -41,7 +51,31 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
     final provider = context.watch<GuideProvider>();
     final theme = Theme.of(context);
 
-    return RefreshIndicator(
+    return Column(
+      children: [
+        // Filtro de estados
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: SegmentedButton<String>(
+              segments: stateLabels.entries.map((e) => ButtonSegment<String>(
+                value: e.key,
+                label: Text(e.value),
+              )).toList(),
+            selected: {_selectedState},
+            onSelectionChanged: (Set<String> selection) {
+              final newState = selection.first;
+              setState(() {
+                _selectedState = newState;
+              });
+              // Actualizar el estado en el provider
+              context.read<GuideProvider>().setClientDispatchFilterState(newState);
+              _loadGuides();
+            },
+          ),
+        ),
+        // Lista con refresh
+        Expanded(
+          child: RefreshIndicator(
       onRefresh: _loadGuides,
       child: provider.isLoading
           ? const LoadingIndicator(
@@ -53,6 +87,9 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                   onRetry: _loadGuides,
                 )
               : _buildGuideList(context),
+          ),
+        ),
+      ],
     );
   }
 
@@ -62,7 +99,8 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
 
     if (provider.guides.isEmpty) {
       return Center(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
@@ -79,7 +117,9 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Solo se muestran guías en estado "Recibido en Bodega"',
+              _selectedState == 'ReceivedInLocalWarehouse'
+                ? 'No hay guías recibidas en bodega'
+                : 'No hay guías despachadas sin cubo',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -87,10 +127,11 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
             ),
           ],
         ),
+      ),
       );
     }
 
-    // Ordenar guías: primero las escaneadas/seleccionadas
+    // Ordenar: primero las escaneadas/seleccionadas
     final guides = List.of(provider.guides);
     guides.sort((a, b) {
       final aState = provider.getGuideUiState(a.code ?? '');

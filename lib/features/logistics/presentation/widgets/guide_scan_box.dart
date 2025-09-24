@@ -31,15 +31,21 @@ class _GuideScanBoxState extends State<GuideScanBox> {
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
 
-  void _complete() {
-    if (_canComplete) {
-      widget.onComplete(_scannedGuides.toList());
+  Future<void> _complete() async {
+    if (_canComplete && _scannedGuides.isNotEmpty) {
+      // Procesar todas las guías en un solo request
+      final guides = _scannedGuides.toList();
+
+      // Llamar al callback con todas las guías
+      widget.onComplete(guides);
+
       // Limpiar la lista después de validar
       setState(() {
         _scannedGuides.clear();
         _canComplete = false;
       });
-      // Mantener el foco después de completar
+
+      // Mantener el foco del escáner
       Future.microtask(() {
         if (!_focusNode.hasFocus) {
           _focusNode.requestFocus();

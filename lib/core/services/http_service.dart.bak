@@ -13,7 +13,6 @@ class HttpService {
   String? _token;
   Function()? onSessionExpired;
   Function()? onTokenRefreshNeeded;
-  bool _isHandlingExpiredSession = false;
 
   /// Callback para refrescar el token cuando sea necesario
   Function()? get tokenRefreshCallback => onTokenRefreshNeeded;
@@ -62,51 +61,102 @@ class HttpService {
     // Asegurar formato correcto del token
     _token = token.startsWith('Bearer ') ? token : 'Bearer $token';
     AppLogger.log('Token set: $_token', source: 'HttpService', type: 'AUTH');
-    _isHandlingExpiredSession = false; // Resetear flag al establecer nuevo token
   }
 
   /// Obtiene los headers comunes para las peticiones
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    // setToken ya normaliza el formato a 'Bearer <token>' si fuese necesario
     if (_token != null) 'Authorization': _token!,
   };
 
-  /// Maneja una respuesta 401 o error de sesión
-  Future<void> _handleSessionExpired({
+  /// Realiza una petición con reintentos de autenticación
+  Future<http.Response> _withAuthRetry(
+    Future<http.Response> Function() send,
+    String requestUrl, {
     bool suppressAuthHandling = false,
-    String? message,
-    String? messageDetail,
   }) async {
-    if (_isHandlingExpiredSession) {
-      AppLogger.log(
-        'Session expired handling already in progress, skipping',
-        source: 'HttpService'
-      );
-      return;
-    }
-
-    _isHandlingExpiredSession = true;
-
-    if (!suppressAuthHandling) {
-      _token = null;
+    try {
+      var response = await send();
       
-      if (onSessionExpired != null) {
+      // Si se suprime el manejo de auth, retornar directamente
+      if (suppressAuthHandling) {
+        return response;
+      }
+
+      // Si no es 401, retornar directamente
+      if (response.statusCode != 401) {
+        return response;
+      }
+
+      // Si ya intentamos refrescar el token y seguimos recibiendo 401,
+      // no intentar de nuevo para evitar ciclos infinitos
+      if (_token == null) {
         AppLogger.log(
-          'Calling onSessionExpired callback',
+          'Token is null, skipping refresh attempt',
           source: 'HttpService'
         );
-        await Future(() => onSessionExpired!());
+        return response;
       }
-    } else {
+
       AppLogger.log(
-        'Skipping session expired handling due to suppressAuthHandling',
+        'Received 401 - Attempting token refresh and retry',
         source: 'HttpService'
       );
+
+      // Intentar refrescar token
+      if (onTokenRefreshNeeded != null) {
+        final refreshed = await onTokenRefreshNeeded!();
+        if (refreshed) {
+          AppLogger.log(
+            'Token refreshed, retrying request',
+            source: 'HttpService'
+          );
+          // Reintento con el nuevo token
+          final retryResponse = await send();
+          
+          // Si aún así recibimos 401, limpiar token y no reintentar más
+          if (retryResponse.statusCode == 401) {
+            AppLogger.log(
+              'Still getting 401 after token refresh, clearing token',
+              source: 'HttpService'
+            );
+            _token = null;
+          }
+          
+          return retryResponse;
+        }
+      }
+
+      // Si no hay callback de refresh o falló, proceder con 401
+      AppLogger.log(
+        'Token refresh failed or not available',
+        source: 'HttpService'
+      );
+      
+      // Limpiar token si el refresh falló
+      _token = null;
+      return response;
+
+    } catch (e) {
+      AppLogger.error(
+        'Error in auth retry mechanism',
+        error: e,
+        source: 'HttpService'
+      );
+      rethrow;
     }
   }
 
   /// Realiza una petición GET
+  /// 
+  /// [suppressAuthHandling] determina el comportamiento ante errores de autenticación:
+  /// - Si es false (default): limpia el token y llama a [onSessionExpired]
+  /// - Si es true: retorna el error pero mantiene la sesión activa
+  /// 
+  /// Este parámetro es útil cuando necesitas manejar los errores 401/SESSION_EXPIRED 
+  /// de forma personalizada en la UI sin cerrar la sesión automáticamente.
   Future<ApiResponse<T>> get<T>(
     String path,
     T Function(Map<String, dynamic> json) fromJson, {
@@ -126,11 +176,16 @@ class HttpService {
       );
 
       final client = http.Client();
-      final response = await client.get(uri, headers: _headers)
-        .timeout(const Duration(seconds: 30));
-
-      AppLogger.apiCall(uri.toString(), method: 'GET');
-      
+      final response = await _withAuthRetry(
+        () => client.get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 30)),
+        uri.toString(),
+        suppressAuthHandling: suppressAuthHandling,
+      );
+      AppLogger.apiCall(
+        uri.toString(),
+        method: 'GET',
+      );
       final sanitizedBody = _sanitizeBodyForLog(uri.toString(), response.body);
       AppLogger.apiResponse(
         uri.toString(),
@@ -144,20 +199,32 @@ class HttpService {
           source: 'HttpService',
           error: 'Session expired',
         );
-
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
-
+        final error = ApiError.sessionExpired();
+        
+        if (!suppressAuthHandling) {
+          _token = null;
+          await Future(() {
+            onSessionExpired?.call();
+          });
+        } else {
+          AppLogger.log(
+            'Skipping token cleanup due to suppressAuthHandling',
+            source: 'HttpService'
+          );
+        }
+        
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: error.userMessage,
           content: null,
         );
       }
 
       Map<String, dynamic> json;
       try {
+        // Intentar parsear la respuesta del backend
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
+        // Si no podemos parsear, devolver la respuesta tal cual del backend
         return ApiResponse.error(
           messageDetail: response.body,
           content: null
@@ -170,17 +237,24 @@ class HttpService {
 
       // Si el backend respondió sesión expirada en el body
       if (code == ApiErrorCode.SESSION_EXPIRED || code == ApiErrorCode.INVALID_TOKEN) {
-        await _handleSessionExpired(
-          suppressAuthHandling: suppressAuthHandling,
-          message: message,
-          messageDetail: messageDetail,
-        );
-
-        return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
-          content: null,
-        );
+        developer.log('Auth error in body code ($code): $messageDetail', name: 'HttpService');
+        
+        if (!suppressAuthHandling) {
+          _token = null;
+          await Future(() {
+            onSessionExpired?.call();
+          });
+          return ApiResponse.error(message: ApiError.sessionExpired().userMessage);
+        } else {
+          AppLogger.log(
+            'Returning error but keeping session due to suppressAuthHandling',
+            source: 'HttpService'
+          );
+          return ApiResponse.error(
+            message: json['message'] ?? 'Error de autenticación',
+            content: null,
+          );
+        }
       }
 
       // Si el código no es 0 (éxito) o 1 (warning), es un error
@@ -190,6 +264,7 @@ class HttpService {
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
+      // Si el mensaje es el de éxito por defecto, moverlo a messageDetail
       final mDetail = message == 'Su transacción fue realizada con éxito (0)'
           ? message // Usar el mensaje genérico como messageDetail
           : messageDetail;
@@ -201,16 +276,20 @@ class HttpService {
         content: fromJson(json),
       );
     } catch (e) {
-      AppLogger.error('Error en GET request', error: e, source: 'HttpService');
-      final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
-        message: e.toString(),
-      );
+      final error = _handleError(e);
+      developer.log('Error en GET request: ${error.message}', name: 'HttpService', error: e);
       return ApiResponse.error(message: error.userMessage);
     }
   }
 
   /// Realiza una petición POST
+  /// 
+  /// [suppressAuthHandling] determina el comportamiento ante errores de autenticación:
+  /// - Si es false (default): limpia el token y llama a [onSessionExpired]
+  /// - Si es true: retorna el error pero mantiene la sesión activa
+  /// 
+  /// Este parámetro es útil cuando necesitas manejar los errores 401/SESSION_EXPIRED 
+  /// de forma personalizada en la UI sin cerrar la sesión automáticamente.
   Future<ApiResponse<T>> post<T>(
     String path,
     dynamic data,
@@ -227,11 +306,15 @@ class HttpService {
 
     try {
       final client = http.Client();
-      final response = await client.post(
-        Uri.parse(baseUrl + path),
-        headers: _headers,
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 30));
+      final response = await _withAuthRetry(
+        () => client.post(
+          Uri.parse(baseUrl + path),
+          headers: _headers,
+          body: jsonEncode(data),
+        ).timeout(const Duration(seconds: 30)),
+        baseUrl + path,
+        suppressAuthHandling: suppressAuthHandling,
+      );
 
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       final sanitizedBody = _sanitizeBodyForLog(baseUrl + path, response.body);
@@ -243,12 +326,20 @@ class HttpService {
           source: 'HttpService',
           error: 'Session expired',
         );
-
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
-
+        final error = ApiError.sessionExpired();
+        if (!suppressAuthHandling) {
+          _token = null;
+          await Future(() {
+            onSessionExpired?.call();
+          });
+        } else {
+          AppLogger.log(
+            'Skipping token cleanup due to suppressAuthHandling',
+            source: 'HttpService'
+          );
+        }
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          message: error.userMessage,
           content: null,
         );
       }
@@ -257,9 +348,7 @@ class HttpService {
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
-        return ApiResponse.error(
-          message: ApiError.serverError('Respuesta inválida del servidor').userMessage
-        );
+        return ApiResponse.error(message: ApiError.serverError('Respuesta inválida del servidor').userMessage);
       }
 
       final code = json['code'] as int? ?? ApiErrorCode.SERVER_ERROR;
@@ -278,21 +367,29 @@ class HttpService {
 
       // Si el backend respondió sesión expirada en el body
       if (code == ApiErrorCode.SESSION_EXPIRED || code == ApiErrorCode.INVALID_TOKEN) {
-        await _handleSessionExpired(
-          suppressAuthHandling: suppressAuthHandling,
-          message: message,
-          messageDetail: messageDetail,
-        );
-
-        return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
-          content: null,
-        );
+        developer.log('Auth error detected: $message', name: 'HttpService');
+        
+        if (!suppressAuthHandling) {
+          _token = null;
+          await Future(() {
+            onSessionExpired?.call();
+          });
+          return ApiResponse.error(message: ApiError.sessionExpired().userMessage);
+        } else {
+          AppLogger.log(
+            'Returning error but keeping session due to suppressAuthHandling',
+            source: 'HttpService'
+          );
+          return ApiResponse.error(
+            message: json['message'] ?? 'Error de autenticación',
+            content: null,
+          );
+        }
       }
 
       // Si el código no es 0 (éxito) o 1 (warning), es un error
       if (code > 1) {
+        // Para errores, priorizar siempre messageDetail
         return ApiResponse.error(
           message: messageDetail ?? message,
           messageDetail: messageDetail
@@ -307,16 +404,20 @@ class HttpService {
         content: fromJson(json),
       );
     } catch (e) {
-      AppLogger.error('Error en POST request', error: e, source: 'HttpService');
-      final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
-        message: e.toString(),
-      );
+      final error = _handleError(e);
+      developer.log('Error en POST request: ${error.message}', name: 'HttpService', error: e);
       return ApiResponse.error(message: error.userMessage);
     }
   }
 
   /// Realiza una petición PUT
+  /// 
+  /// [suppressAuthHandling] determina el comportamiento ante errores de autenticación:
+  /// - Si es false (default): limpia el token y llama a [onSessionExpired]
+  /// - Si es true: retorna el error pero mantiene la sesión activa
+  /// 
+  /// Este parámetro es útil cuando necesitas manejar los errores 401/SESSION_EXPIRED 
+  /// de forma personalizada en la UI sin cerrar la sesión automáticamente.
   Future<ApiResponse<T>> put<T>(
     String path,
     dynamic data,
@@ -330,11 +431,15 @@ class HttpService {
 
     try {
       final client = http.Client();
-      final response = await client.put(
-        Uri.parse(baseUrl + path),
-        headers: _headers,
-        body: jsonEncode(data),
-      ).timeout(const Duration(seconds: 30));
+      final response = await _withAuthRetry(
+        () => client.put(
+          Uri.parse(baseUrl + path),
+          headers: _headers,
+          body: jsonEncode(data),
+        ).timeout(const Duration(seconds: 30)),
+        baseUrl + path,
+        suppressAuthHandling: suppressAuthHandling,
+      );
 
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       developer.log('Response Body: ${response.body}', name: 'HttpService');
@@ -345,12 +450,20 @@ class HttpService {
           source: 'HttpService',
           error: 'Session expired',
         );
-
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
-        
+        final error = ApiError.sessionExpired();
+        if (!suppressAuthHandling) {
+          _token = null;
+          await Future(() {
+            onSessionExpired?.call();
+          });
+        } else {
+          AppLogger.log(
+            'Skipping token cleanup due to suppressAuthHandling',
+            source: 'HttpService'
+          );
+        }
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          message: error.userMessage,
           content: null,
         );
       }
@@ -359,9 +472,7 @@ class HttpService {
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
-        return ApiResponse.error(
-          message: ApiError.serverError('Respuesta inválida del servidor').userMessage
-        );
+        return ApiResponse.error(message: ApiError.serverError('Respuesta inválida del servidor').userMessage);
       }
 
       final code = json['code'] as int? ?? ApiErrorCode.SERVER_ERROR;
@@ -392,12 +503,40 @@ class HttpService {
         content: fromJson != null ? fromJson(json) : null,
       );
     } catch (e) {
-      AppLogger.error('Error en PUT request', error: e, source: 'HttpService');
-      final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
-        message: e.toString(),
-      );
+      final error = _handleError(e);
+      developer.log('Error en PUT request: ${error.message}', name: 'HttpService', error: e);
       return ApiResponse.error(message: error.userMessage);
     }
+  }
+
+  /// Maneja errores comunes y los convierte en ApiError
+  ApiError _handleError(Object e) {
+    developer.log('Error HTTP: $e', name: 'HttpService');
+    
+    if (e is SocketException) {
+      return ApiError(
+        code: ApiErrorCode.NETWORK_ERROR,
+        message: 'Error de conexión: ${e.message}',
+      );
+    }
+    
+    if (e is TimeoutException) {
+      return ApiError(
+        code: ApiErrorCode.TIMEOUT,
+        message: 'La solicitud ha tardado demasiado tiempo',
+      );
+    }
+    
+    if (e is FormatException) {
+      return ApiError(
+        code: ApiErrorCode.SERVER_ERROR,
+        message: 'Error al procesar la respuesta del servidor',
+      );
+    }
+    
+    return ApiError(
+      code: ApiErrorCode.UNKNOWN,
+      message: e.toString(),
+    );
   }
 }

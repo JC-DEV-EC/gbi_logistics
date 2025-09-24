@@ -47,6 +47,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Autocomplete<int>(
+        key: ValueKey(guideProvider.selectedSubcourierId),
         fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
           void _showAllOptions() {
             if (!focusNode.hasFocus) {
