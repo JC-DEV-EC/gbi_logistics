@@ -152,8 +152,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatCard(BuildContext context, String title, int count, String route) {
     final theme = Theme.of(context);
-    return Card(
-      child: InkWell(
+    // Optimizar renderizado de cards del dashboard
+    return RepaintBoundary(
+      child: Card(
+        child: InkWell(
         onTap: () {
           Navigator.pushNamed(context, route, arguments: title);
         },
@@ -188,6 +190,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

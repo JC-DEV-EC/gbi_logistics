@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/transport_cube_provider.dart';
 import '../presentation/helpers/error_helper.dart';
 import '../presentation/helpers/date_helper.dart';
@@ -21,21 +22,18 @@ class TransportCubeListScreen extends StatefulWidget {
   });
 
   @override
-  State<TransportCubeListScreen> createState() => _TransportCubeListScreenState();
+  State<TransportCubeListScreen> createState() =>
+      _TransportCubeListScreenState();
 }
 
 class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
   @override
   void initState() {
     super.initState();
-    // Usar addPostFrameCallback para evitar setState durante build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeAndLoad();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeAndLoad());
   }
 
   Future<void> _initializeAndLoad() async {
-    // Solo cargar los cubos - el estado ya está configurado por la pantalla padre
     await _loadCubes();
   }
 
@@ -46,31 +44,27 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TransportCubeProvider>();
-    final theme = Theme.of(context);
 
     developer.log(
       'Building TransportCubeListScreen:\n'
-      '- Loading: ${provider.isLoading}\n'
-      '- Error: ${provider.error}\n'
-      '- Cubes count: ${provider.cubes.length}',
-      name: 'TransportCubeListScreen'
+          '- Loading: ${provider.isLoading}\n'
+          '- Error: ${provider.error}\n'
+          '- Cubes count: ${provider.cubes.length}',
+      name: 'TransportCubeListScreen',
     );
 
     return RefreshIndicator(
       onRefresh: _loadCubes,
       child: provider.isLoading
-          ? const LoadingIndicator(
-              message: 'Cargando cubos...',
-            )
+          ? const LoadingIndicator(message: 'Cargando cubos...')
           : provider.cubes.isNotEmpty
-              // Si hay datos, mostrar la lista aunque haya error
-              ? _buildCubeList(context)
-              : provider.error != null
-                  ? ErrorHelper.buildErrorWidget(
-                      error: provider.error!,
-                      onRetry: _loadCubes,
-                    )
-                  : _buildCubeList(context),
+          ? _buildCubeList(context)
+          : provider.error != null
+          ? ErrorHelper.buildErrorWidget(
+        error: provider.error!,
+        onRetry: _loadCubes,
+      )
+          : _buildCubeList(context),
     );
   }
 
@@ -80,11 +74,11 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
 
     developer.log(
       '_buildCubeList called:\n'
-      '- Provider loading: ${provider.isLoading}\n'
-      '- Provider error: ${provider.error}\n'
-      '- Provider cubes count: ${provider.cubes.length}\n'
-      '- Selected state: ${provider.selectedState}',
-      name: 'TransportCubeListScreen'
+          '- Provider loading: ${provider.isLoading}\n'
+          '- Provider error: ${provider.error}\n'
+          '- Provider cubes count: ${provider.cubes.length}\n'
+          '- Selected state: ${provider.selectedState}',
+      name: 'TransportCubeListScreen',
     );
 
     if (provider.cubes.isEmpty) {
@@ -117,115 +111,109 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
         final cube = provider.cubes[index];
         final isSelected = provider.isCubeSelected(cube.id);
 
-        return Card(
-          clipBehavior: Clip.hardEdge,
-          child: InkWell(
-            onTap: () {
-              if (widget.initialState == 'Sent') {
-                // En estado Sent, tap simple alterna selección
-                developer.log(
-                  'Tap on cube card - ID: ${cube.id} - Current selected: ${provider.isCubeSelected(cube.id)}',
-                  name: 'TransportCubeListScreen',
-                );
-                provider.toggleCubeSelection(cube.id);
-              } else if (widget.initialState == 'Created') {
-                // En estado Created (Despacho en Aduana), tap simple alterna selección
-                developer.log(
-                  'Tap on cube card (Created) - ID: ${cube.id} - Current selected: ${provider.isCubeSelected(cube.id)}',
-                  name: 'TransportCubeListScreen',
-                );
-                provider.toggleCubeSelection(cube.id);
-              } else {
-                // En otros estados, tap simple navega a detalles
-                Navigator.pushNamed(
-                  context,
-                  '/transport-cube/details',
-                  arguments: cube.id,
-                );
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: isSelected
-                    ? Border.all(
-                        color: theme.colorScheme.primary,
-                        width: 2,
-                      )
-                    : null,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Cubo #${cube.id}',
-                          style: theme.textTheme.titleLarge,
-                          overflow: TextOverflow.ellipsis,
+        return RepaintBoundary(
+          child: Card(
+            clipBehavior: Clip.hardEdge,
+            child: InkWell(
+              onTap: () {
+                if (widget.initialState == 'Sent' ||
+                    widget.initialState == 'Created') {
+                  developer.log(
+                    'Tap on cube card - ID: ${cube.id} - Current selected: ${provider.isCubeSelected(cube.id)}',
+                    name: 'TransportCubeListScreen',
+                  );
+                  provider.toggleCubeSelection(cube.id);
+                } else {
+                  Navigator.pushNamed(
+                    context,
+                    '/transport-cube/details',
+                    arguments: cube.id,
+                  );
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: isSelected
+                      ? Border.all(
+                    color: theme.colorScheme.primary,
+                    width: 2,
+                  )
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Cubo #${cube.id}',
+                            style: theme.textTheme.titleLarge,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Ver detalles',
-                        icon: const Icon(Icons.visibility_outlined),
-                        onPressed: () {
-                          Navigator.pushNamed(
-                            context,
-                            '/transport-cube/details',
-                            arguments: cube.id,
-                          );
-                        },
-                      ),
-                      const SizedBox(width: 4),
-                      StateBadge(
-                        state: cube.state,
-                        label: cube.stateLabel ?? 'Desconocido',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 24,
-                    runSpacing: 8,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${cube.guides} guías',
-                            style: theme.textTheme.bodyLarge?.copyWith(
+                        IconButton(
+                          tooltip: 'Ver detalles',
+                          icon: const Icon(Icons.visibility_outlined),
+                          onPressed: () {
+                            Navigator.pushNamed(
+                              context,
+                              '/transport-cube/details',
+                              arguments: cube.id,
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 4),
+                        StateBadge(
+                          state: cube.state,
+                          label: cube.stateLabel ?? 'Desconocido',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 24,
+                      runSpacing: 8,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 20,
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            DateHelper.formatDateTime(cube.registerDateTime),
-                            style: theme.textTheme.bodyLarge?.copyWith(
+                            const SizedBox(width: 8),
+                            Text(
+                              '${cube.guides} guías',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 20,
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
+                            const SizedBox(width: 8),
+                            Text(
+                              DateHelper.formatDateTime(cube.registerDateTime),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -234,4 +222,3 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
     );
   }
 }
-

@@ -130,6 +130,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _tokenRefreshTimer?.cancel();
     if (_authObserver != null) {
       WidgetsBinding.instance.removeObserver(_authObserver!);
+      _authObserver = null;
     }
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

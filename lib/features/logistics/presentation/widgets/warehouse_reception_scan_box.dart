@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import '../../models/operation_models.dart';
 import '../../providers/guide_provider.dart';
@@ -47,7 +48,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
 
     await _scanController.processScan(() async {
       try {
-        // Buscar la guía y validar su estado
+        // Buscar la guía y validar que esté en estado "Tránsito a Bodega"
         final response = await context.read<GuideProvider>().searchGuide(
           cleanGuide,
           status: TrackingStateType.transitToWarehouse,  // Buscar solo guías en tránsito
@@ -59,25 +60,36 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response.messageDetail ?? response.message ?? 'Error al procesar guía'),
+              content: Text(response.messageDetail ?? 'Guía no encontrada en estado "Tránsito a Bodega"'),
               backgroundColor: Colors.red,
-              duration: const Duration(seconds: 10),
+              duration: const Duration(seconds: 4),
             ),
           );
         } else {
-          // La guía existe y está en el estado correcto
-          setState(() {
-            _scannedGuides.add(cleanGuide);
-          });
-          await AppSounds.success();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.messageDetail ?? response.message ?? 'Guía validada'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          // La guía existe y está en estado "Tránsito a Bodega", agregarla para cambio de estado
+          if (_scannedGuides.contains(cleanGuide)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Guía "$cleanGuide" ya fue escaneada'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          } else {
+            setState(() {
+              _scannedGuides.add(cleanGuide);
+            });
+            // Reproducir sonido sin bloquear la UI y tolerando timeouts/errores
+            try { await AppSounds.success().timeout(const Duration(seconds: 2)); } catch (_) {}
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(response.messageDetail ?? 'Guía validada'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         }
       } catch (e) {
         if (!mounted) return;
@@ -90,6 +102,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
           ),
         );
       } finally {
+        if (!mounted) return;
         _controller.clear();
         // Mantener el foco
         Future.microtask(() {
@@ -107,71 +120,84 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
     final provider = context.read<GuideProvider>();
     final guides = _scannedGuides.toList();
 
-    // Hacer un solo request con todas las guías
+    // Actualizar estado de las guías de "Tránsito a Bodega" a "Recibido en Bodega Local"
     final request = UpdateGuideStatusRequest(
       guides: guides,
       newStatus: TrackingStateType.receivedInLocalWarehouse,
     );
 
+    // Log para debugging
+    debugPrint('[DEBUG] Enviando request con newStatus: "${TrackingStateType.receivedInLocalWarehouse}"');
+    debugPrint('[DEBUG] Guides: ${guides.join(", ")}');
+    debugPrint('[DEBUG] HIPÓTESIS: El backend puede estar rechazando el cambio porque las guías están asociadas a un cubo');
+
     final response = await provider.updateGuideStatus(request);
 
     if (!mounted) return;
 
-    // Analizar la respuesta para identificar guías que no se pudieron actualizar
-    final Set<String> failed = {};
-    final detail = (response.messageDetail ?? response.message ?? '').toString();
-    if (detail.isNotEmpty) {
-      // Si el mensaje menciona guías específicas, extraerlas
-      final regex = RegExp(r'\b\d{5,}\b');
-      final failedGuides = regex.allMatches(detail).map((m) => m.group(0)!).toSet();
-      failed.addAll(failedGuides);
-    }
+    // Log completo de la respuesta del backend
+    debugPrint('[DEBUG] Respuesta completa del backend:');
+    debugPrint('[DEBUG] - isSuccessful: ${response.isSuccessful}');
+    debugPrint('[DEBUG] - message: ${response.message}');
+    debugPrint('[DEBUG] - messageDetail: ${response.messageDetail}');
 
-    // Las guías que no están en failed son las que se procesaron con éxito
-    final succeeded = guides.where((code) => !failed.contains(code)).toList();
+    // Verificar si la actualización fue exitosa
+    if (response.isSuccessful) {
+      debugPrint('[DEBUG] Backend respondó exitosamente, verificando cambio real de estado...');
+      
+      // Esperar un momento para que el backend procese
+      await Future.delayed(const Duration(milliseconds: 1000));
+      
+      // Verificar que al menos una guía cambió de estado
+      final verifyProvider = context.read<GuideProvider>();
+      bool anyChanged = false;
+      
+      for (final guide in guides) {
+        final verifyResponse = await verifyProvider.searchGuide(
+          guide,
+          status: TrackingStateType.receivedInLocalWarehouse,
+        );
+        if (verifyResponse.isSuccessful && verifyResponse.content != null) {
+          anyChanged = true;
+          debugPrint('[DEBUG] Guía $guide confirmada en estado ReceivedInLocalWarehouse');
+          break;
+        }
+      }
+      
+      if (anyChanged) {
+        // Todas las guías se procesaron correctamente
+        widget.onComplete(guides);
+        setState(() {
+          _scannedGuides.clear();
+        });
 
-    // Enviar al callback solo las guías exitosas
-    if (succeeded.isNotEmpty) {
-      widget.onComplete(succeeded);
-    }
-
-    // Mantener en pantalla solo las guías que fallaron
-    setState(() {
-      _scannedGuides
-        ..clear()
-        ..addAll(failed);
-    });
-
-    // Mostrar resumen con detalles
-    final total = guides.length;
-    final okCount = succeeded.length;
-    final failCount = failed.length;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              failCount == 0
-                ? '✅ Se actualizaron las $total guías'
-                : '⚠️ $okCount guías actualizadas, $failCount pendientes',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (failCount > 0 && detail.isNotEmpty) ...[  
-              const SizedBox(height: 4),
-              Text(
-                detail,
-                style: const TextStyle(fontSize: 13),
-              ),
-            ],
-          ],
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.messageDetail ?? 'Guías procesadas exitosamente'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        debugPrint('[DEBUG] Backend dijo exitoso pero las guías no cambiaron de estado');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.messageDetail ?? 'Las guías no reflejan el cambio esperado'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } else {
+      // Error - mostrar mensaje específico del backend
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(response.messageDetail ?? 'Error al actualizar las guías'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
         ),
-        backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
-        duration: Duration(seconds: failCount > 0 ? 8 : 4),  // Más tiempo si hay fallos
-      ),
-    );
+      );
+    }
 
     // Mantener el foco del escáner
     Future.microtask(() {
@@ -232,7 +258,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
 
         if (_scannedGuides.isNotEmpty) ...[
           const SizedBox(height: 16),
-          
+
           // Botón de actualizar estado
           FilledButton.icon(
             onPressed: _complete,
@@ -241,7 +267,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
           ),
 
           const SizedBox(height: 16),
-          
+
           // Lista de guías escaneadas
           Container(
             decoration: BoxDecoration(

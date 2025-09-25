@@ -106,21 +106,30 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  height: 120,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'GBI Logistics',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        color: theme.colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
+                // Logo y texto con layout flexible
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Logo principal con altura flexible
+                    SizedBox(
+                      width: MediaQuery.of(context).size.width * 0.5,  // Reducido a 50%
+                      height: 120,  // Altura fija para el logo
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 16),  // Espaciado reducido
+                    // Texto "Conectando el Mundo"
+                    Text(
+                      'Conectando el Mundo',
+                      style: theme.textTheme.titleLarge?.copyWith(  // Reducido el tamaño
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 48),
                 Card(

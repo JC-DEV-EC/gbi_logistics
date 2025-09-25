@@ -4,12 +4,15 @@ import '../../features/logistics/providers/auth_provider.dart';
 import '../services/app_logger.dart';
 
 class AuthLifecycleObserver with WidgetsBindingObserver {
+  static const String _tag = 'AuthLifecycleObserver';
   final BuildContext context;
+  bool _disposed = false;
+
   AuthLifecycleObserver(this.context);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && !_disposed) {
       AppLogger.log(
         'App resumed - Refreshing authentication state',
         source: 'AuthLifecycleObserver'

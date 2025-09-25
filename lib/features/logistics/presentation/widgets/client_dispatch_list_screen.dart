@@ -146,12 +146,14 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
       itemCount: guides.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
+        // Envolver cada item en RepaintBoundary para evitar repintados innecesarios
         final guide = guides[index];
         final uiState = provider.getGuideUiState(guide.code ?? '');
         final code = guide.code ?? '';
         final isSelected = code.isNotEmpty && provider.isGuideSelected(code);
 
-        return Card(
+        return RepaintBoundary(
+          child: Card(
           clipBehavior: Clip.hardEdge,
           child: InkWell(
             onTap: () {
@@ -264,7 +266,8 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
               ),
             ),
           ),
-        );
+        ),
+      );
       },
     );
   }

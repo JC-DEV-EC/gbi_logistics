@@ -52,8 +52,7 @@ class GuideService {
 
     AppLogger.log(
       'Resultado de actualización:\n'
-      '- Exitoso: ${response.isSuccessful}\n'
-      '- Mensaje: ${response.messageDetail ?? response.message}',
+      '- Exitoso: ${response.isSuccessful}',
       source: 'GuideService'
     );
 
@@ -88,7 +87,7 @@ class GuideService {
     );
 
     AppLogger.log(
-      'Respuesta despacho:\nExitoso: ${response.isSuccessful}\nMensaje: ${response.messageDetail ?? response.message}',
+      'Respuesta despacho:\nExitoso: ${response.isSuccessful}',
       source: 'GuideService'
     );
 

@@ -24,24 +24,44 @@ abstract class TransportCubeDetailsBaseScreen extends StatefulWidget {
 abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetailsBaseScreen>
     extends State<T> {
   late Future<TransportCubeDetails> _detailsFuture;
-  
+  TransportCubeDetails? _lastDetails;
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
     _detailsFuture = _loadDetails();
   }
 
+  @override
+  void dispose() {
+    _lastDetails = null;
+    super.dispose();
+  }
+
   Future<TransportCubeDetails> _loadDetails() async {
+    // Evitar carga si ya tenemos detalles recientes
+    if (_lastDetails != null &&
+        DateTime.now().difference(_lastDetails!.transportCube.registerDateTime).inSeconds < 30) {
+      return _lastDetails!;
+    }
+
     final response = await context.read<TransportCubeProvider>().service
         .getTransportCubeDetails(widget.cubeId, suppressAuthHandling: true);
 
     if (!mounted) throw Exception('Widget desmontado');
-    
+
     if (!response.isSuccessful || response.content == null) {
       throw Exception(response.messageDetail ?? response.message ?? 'No se pudieron cargar los detalles');
     }
 
-    return response.content!;
+    _lastDetails = response.content!;
+    return _lastDetails!;
+  }
+
+  // Método para limpiar los detalles cacheados
+  void _clearDetailsCache() {
+    _lastDetails = null;
   }
 
   Future<void> _refreshDetails() async {
@@ -51,12 +71,20 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
   /// Método protegido para recargar detalles desde clases hijas
   @protected
   Future<void> refreshDetails({bool withDelay = true}) async {
-    if (withDelay) {
-      await Future.delayed(const Duration(milliseconds: 500));
+    if (_isLoading) return;
+
+    try {
+      _isLoading = true;
+      if (withDelay) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      setState(() {
+        _detailsFuture = _loadDetails();
+      });
+    } finally {
+      _isLoading = false;
     }
-    setState(() {
-      _detailsFuture = _loadDetails();
-    });
   }
 
   /// Widget para acciones específicas del flujo (opcional)
@@ -70,8 +98,6 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Cubo #${widget.cubeId}'),
@@ -92,9 +118,7 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
           future: _detailsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingIndicator(
-                message: 'Cargando detalles...',
-              );
+              return const LoadingIndicator(message: 'Cargando detalles...');
             }
 
             if (snapshot.hasError) {
@@ -134,9 +158,9 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
+                    const Text(
                       'Estado actual:',
-                      style: theme.textTheme.titleMedium,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                     ),
                     StateBadge(
                       state: cube.state,
@@ -147,7 +171,7 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
                 const SizedBox(height: 16),
                 Text(
                   'Fecha de registro: ${DateHelper.formatDateTime(cube.registerDateTime)}',
-                  style: theme.textTheme.bodyLarge,
+                  style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 16),
                 GuideCounter(
@@ -173,54 +197,48 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
             children: [
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Guías',
-                  style: theme.textTheme.titleLarge,
-                ),
+                child: Text('Guías', style: theme.textTheme.titleLarge),
               ),
               if (details.guides.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(16),
-                  child: Center(
-                    child: Text('No hay guías en este cubo'),
-                  ),
+                  child: Center(child: Text('No hay guías en este cubo')),
                 )
               else
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: details.guides.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final guide = details.guides[index];
-                    return ListTile(
-                      title: Text(
-                        guide.packageCode,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
+                ...List.generate(details.guides.length, (index) {
+                  final guide = details.guides[index];
+                  return Column(
+                    children: [
+                      if (index > 0) const Divider(height: 1),
+                      ListTile(
+                        title: Text(
+                          guide.packageCode,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: GuideStatusIndicator(
+                          state: guide.state,
+                          stateLabel: guide.stateLabel ?? GuideTransportCubeState.getLabel(guide.state),
+                          showLabel: true,
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.more_vert),
+                          onPressed: () => _showGuideActions(context, guide),
                         ),
                       ),
-                      subtitle: GuideStatusIndicator(
-                        state: guide.state,
-                        stateLabel: guide.stateLabel ?? GuideTransportCubeState.getLabel(guide.state),
-                        showLabel: true,
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.more_vert),
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (context) => _buildGuideActions(context, guide),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
+                    ],
+                  );
+                }),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  void _showGuideActions(BuildContext context, dynamic guide) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => _buildGuideActions(context, guide),
     );
   }
 

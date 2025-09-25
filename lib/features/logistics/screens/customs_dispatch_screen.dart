@@ -161,14 +161,51 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
     );
   }
 
+  Future<bool> _confirmCloseDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (confirmCtx) => AlertDialog(
+        title: const Text('¿Cerrar ventana?'),
+        content: const Text('¿Está seguro que desea cerrar esta ventana? Se perderán las guías escaneadas.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(confirmCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(confirmCtx, true),
+            child: const Text('Sí, cerrar'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _showCustomsDispatchDialog() async {
     // Guardar el context padre (de la pantalla) para usarlo después del pop
     final parentContext = context;
 
     await showDialog<void>(
       context: parentContext,
+      barrierDismissible: false, // No cerrar al tocar fuera del diálogo
       builder: (dialogCtx) => AlertDialog(
-        title: const Text('Crear Nuevo Cubo'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Crear Nuevo Cubo'),
+            IconButton(
+              tooltip: 'Cerrar',
+              onPressed: () async {
+                if (await _confirmCloseDialog(dialogCtx)) {
+                  if (!dialogCtx.mounted) return;
+                  Navigator.pop(dialogCtx);
+                }
+              },
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
         content: SizedBox(
           width: MediaQuery.of(parentContext).size.width * 0.8,
           child: CustomsDispatchScanBox(
@@ -219,12 +256,6 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
             },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancelar'),
-          ),
-        ],
       ),
     );
   }

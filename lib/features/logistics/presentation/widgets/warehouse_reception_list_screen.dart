@@ -64,7 +64,9 @@ class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScr
                   error: provider.error!,
                   onRetry: _loadGuides,
                 )
-              : _buildGuideList(context),
+              : SizedBox.expand(
+                  child: _buildGuideList(context),
+                ),
     );
   }
 

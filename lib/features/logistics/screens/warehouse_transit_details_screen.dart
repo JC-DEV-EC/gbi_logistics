@@ -73,7 +73,7 @@ class _WarehouseTransitDetailsScreenState extends TransportCubeDetailsBaseScreen
                 // Cambiar estado de guías a ReceivedInLocalWarehouse
                 final request = UpdateGuideStatusRequest(
                   guides: scanned,
-                  newStatus: 'ReceivedInLocalWarehouse',
+                  newStatus: TrackingStateType.receivedInLocalWarehouse,
                 );
 
                 final response = await context.read<GuideProvider>().updateGuideStatus(request);
