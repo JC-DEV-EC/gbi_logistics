@@ -20,52 +20,57 @@ class WarehouseReceptionScreen extends StatelessWidget {
         title: const Text('Recepción en Bodega'),
       ),
       drawer: const AppDrawer(),
-      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Indicador de carga
-            Consumer<GuideProvider>(
-              builder: (context, provider, _) => provider.isLoading
-                  ? const LinearProgressIndicator()
-                  : const SizedBox.shrink(),
+            // Indicador de carga en la parte superior
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Consumer<GuideProvider>(
+                builder: (context, provider, _) => provider.isLoading
+                    ? const LinearProgressIndicator()
+                    : const SizedBox.shrink(),
+              ),
             ),
             
-            // Caja de escaneo con Flexible
-            Flexible(
-              flex: 0,
-              fit: FlexFit.loose,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
-                child: Consumer<GuideProvider>(
-                  builder: (context, provider, _) {
-                    return WarehouseReceptionScanBox(
-                      onComplete: (scanned) async {
-                        if (scanned.isEmpty) return;
+            // Contenido principal
+            Column(
+              children: [
+                // Caja de escaneo
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Consumer<GuideProvider>(
+                    builder: (context, provider, _) {
+                      return WarehouseReceptionScanBox(
+                        onComplete: (scanned) async {
+                          if (scanned.isEmpty) return;
 
-                        // Ya se actualizó el estado dentro del ScanBox.
-                        // Aquí solo recargamos la lista para reflejar cambios.
-                        if (!context.mounted) return;
-                        await provider.loadGuides(
-                          page: 1,
-                          pageSize: 50,
-                          status: TrackingStateType.transitToWarehouse,
-                        );
-                      },
-                    );
-                  },
+                          // Ya se actualizó el estado dentro del ScanBox.
+                          // Aquí solo recargamos la lista para reflejar cambios.
+                          if (!context.mounted) return;
+                          await provider.loadGuides(
+                            page: 1,
+                            pageSize: 50,
+                            status: TrackingStateType.transitToWarehouse,
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ),
 
-            // Lista de guías - usar espacio restante
-            Expanded(
-              child: const WarehouseReceptionListScreen(
-                title: 'Recepción en Bodega',
-                status: TrackingStateType.transitToWarehouse,
-                showHistoric: false,
-                hideValidated: true,
-              ),
+                // Lista de guías - usar espacio restante
+                Expanded(
+                  child: const WarehouseReceptionListScreen(
+                    title: 'Recepción en Bodega',
+                    status: TrackingStateType.transitToWarehouse,
+                    showHistoric: false,
+                    hideValidated: true,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

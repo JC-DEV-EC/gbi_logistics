@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as developer;
+import 'dart:math' show max;
 import '../../../core/services/app_logger.dart';
 import '../../../core/models/api_response.dart';
 import '../services/transport_cube_service.dart';
@@ -14,12 +15,14 @@ class TransportCubeProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _lastMessageDetail;
-  String _selectedState = TransportCubeState.created;
+  String _selectedState = TransportCubeState.CREATED; // Estado inicial cuando el cubo se crea en aduana
   final Map<int, bool> _loadingDetails = {}; // Rastrear peticiones de detalles por cubeId
   List<op.TransportCubeInfoAPI> _cubes = [];
   TransportCubeDetails? _selectedCubeDetails;
   final Set<int> _selectedCubes = {};
   final TransportCubeService _service;
+  // Cache de futures de detalles por cubo para evitar llamadas duplicadas
+  final Map<int, Future<TransportCubeDetails>> _detailsFutures = {};
 
   // Exponer service para uso interno
   TransportCubeService get service => _service;
@@ -64,7 +67,7 @@ class TransportCubeProvider extends ChangeNotifier {
   Future<TransportCubeDetails> fetchCubeDetailsRaw(int cubeId, {bool suppressAuthHandling = true}) async {
     final resp = await _service.getTransportCubeDetails(cubeId, suppressAuthHandling: suppressAuthHandling);
     if (!resp.isSuccessful || resp.content == null) {
-      throw Exception(resp.messageDetail ?? resp.message ?? '');
+      throw Exception(resp.message ?? 'No se pudo obtener detalles del cubo');
     }
     return resp.content!;
   }
@@ -150,7 +153,7 @@ class TransportCubeProvider extends ChangeNotifier {
 
   // Crea un nuevo cubo
   Future<ApiResponse<NewTransportCubeResponseGenericResponse>> createTransportCube(List<String> guides) async {
-    if (_isLoading) return ApiResponse.error(message: '');
+    if (_isLoading) return ApiResponse.error(message: 'Operación en curso');
 
     try {
       _isLoading = true;
@@ -213,7 +216,7 @@ class TransportCubeProvider extends ChangeNotifier {
               source: 'TransportCubeProvider'
           );
           // Mensaje para el usuario cuando no se detecta el cubo nuevo
-          _lastMessageDetail = 'El backend confirmó la creación pero el cubo aún no aparece en la lista. '
+          _lastMessageDetail = '⚠️ El backend confirmó la creación pero el cubo aún no aparece en la lista. '
               'Esto puede deberse a que la guía no cumple con los requisitos necesarios o a un retardo del sistema. '
               'Intente refrescar la lista en unos segundos.';
         }
@@ -222,10 +225,10 @@ class TransportCubeProvider extends ChangeNotifier {
         return response;
       }
 
-      _errorMessage = response.messageDetail ?? response.message ?? '';
+      _errorMessage = response.messageDetail ?? 'No se pudo crear el cubo';
       return response;
     } catch (e) {
-      _errorMessage = '';
+      _errorMessage = 'No se pudo crear el cubo';
       return ApiResponse.error(message: _errorMessage);
     } finally {
       _isLoading = false;
@@ -257,10 +260,11 @@ class TransportCubeProvider extends ChangeNotifier {
         _lastMessageDetail = response.messageDetail ?? response.message;
         return true;
       }
-      _errorMessage = response.messageDetail ?? response.message ?? '';
+      // Verificar si es error de sesión
+      _errorMessage = response.message ?? 'No se pudo actualizar el estado';
       return false;
     } catch (e) {
-      _errorMessage = '';
+      _errorMessage = 'No se pudo actualizar el estado';
       return false;
     } finally {
       _isLoading = false;
@@ -279,7 +283,7 @@ class TransportCubeProvider extends ChangeNotifier {
         'Cannot process - Loading: $_isLoading, Selected cubes empty: ${_selectedCubes.isEmpty}',
         name: 'TransportCubeProvider',
       );
-      return ApiResponse.error(message: '');
+      return ApiResponse.error(message: 'No hay cubos seleccionados para actualizar');
     }
 
     try {
@@ -310,12 +314,12 @@ class TransportCubeProvider extends ChangeNotifier {
         );
         return response;
       } else {
-        _errorMessage = response.messageDetail ?? response.message ?? '';
+        _errorMessage = response.messageDetail ?? response.message ?? 'No se pudo actualizar el estado';
         developer.log('Failed to change cube states: ${response.message}', name: 'TransportCubeProvider');
         return response;
       }
     } catch (e) {
-      _errorMessage = '';
+      _errorMessage = 'Error al procesar envío a tránsito';
       developer.log('Error in changeSelectedCubesState: $e', name: 'TransportCubeProvider');
       return ApiResponse.error(message: _errorMessage);
     } finally {
@@ -457,11 +461,11 @@ class TransportCubeProvider extends ChangeNotifier {
         _errorMessage = null;
         _lastMessageDetail = null;
       } else {
-        _errorMessage = response.messageDetail ?? response.message ?? '';
+        _errorMessage = response.messageDetail ?? response.message ?? 'Error al cargar cubos';
         developer.log('Failed to load cubes - Error: $_errorMessage', name: 'TransportCubeProvider');
       }
     } catch (e, stackTrace) {
-      _errorMessage = '';
+      _errorMessage = 'Error al cargar cubos';
       developer.log(
         'Error loading cubes',
         name: 'TransportCubeProvider',

@@ -4,8 +4,9 @@ import '../../features/logistics/providers/auth_provider.dart';
 import '../services/app_logger.dart';
 
 class AuthLifecycleObserver with WidgetsBindingObserver {
+  static const String _tag = 'AuthLifecycleObserver';
   final BuildContext context;
-  final bool _disposed = false;
+  bool _disposed = false;
 
   AuthLifecycleObserver(this.context);
 
