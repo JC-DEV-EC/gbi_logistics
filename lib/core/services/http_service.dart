@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import '../services/app_logger.dart';
-import 'dart:io';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../models/api_response.dart';
@@ -138,6 +137,11 @@ class HttpService {
         body: sanitizedBody,
       );
 
+      Map<String, dynamic> json;
+      String? messageDetail;
+      String message = '';
+      int code = ApiErrorCode.unknown;
+      
       if (response.statusCode == 401) {
         AppLogger.error(
           'Received 401 Unauthorized response',
@@ -145,16 +149,25 @@ class HttpService {
           error: 'Session expired',
         );
 
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
+        // Intentar parsear el body para obtener messageDetail del backend
+        try {
+          json = jsonDecode(response.body) as Map<String, dynamic>;
+          messageDetail = json['messageDetail'] as String?;
+        } catch (_) {
+          // Si no se puede parsear, usar null
+        }
+
+        await _handleSessionExpired(
+          suppressAuthHandling: suppressAuthHandling,
+          messageDetail: messageDetail,
+        );
 
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: messageDetail, // Usar messageDetail del backend si existe
           content: null,
         );
       }
 
-      Map<String, dynamic> json;
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
@@ -164,12 +177,12 @@ class HttpService {
         );
       }
 
-      final code = json['code'] as int? ?? ApiErrorCode.SERVER_ERROR;
-      final message = json['message'] as String? ?? '';
-      final messageDetail = json['messageDetail'] as String?;
+      code = json['code'] as int? ?? ApiErrorCode.unknown;
+      message = json['message'] as String? ?? '';
+      messageDetail = json['messageDetail'] as String?;
 
       // Si el backend respondió sesión expirada en el body
-      if (code == ApiErrorCode.SESSION_EXPIRED || code == ApiErrorCode.INVALID_TOKEN) {
+if (code == ApiErrorCode.sessionExpired || code == ApiErrorCode.invalidToken) {
         await _handleSessionExpired(
           suppressAuthHandling: suppressAuthHandling,
           message: message,
@@ -177,16 +190,15 @@ class HttpService {
         );
 
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: messageDetail,
           content: null,
         );
       }
 
       // Si el código no es 0 (éxito) o 1 (warning), es un error
       if (code > 1) {
-        final error = ApiError(code: code, message: messageDetail ?? '');
-        return ApiResponse.error(message: error.userMessage);
+        final error = ApiError(code: code, message: messageDetail ?? message);
+        return ApiResponse.error(messageDetail: error.userMessage);
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
@@ -203,10 +215,10 @@ class HttpService {
     } catch (e) {
       AppLogger.error('Error en GET request', error: e, source: 'HttpService');
       final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
+        code: e is TimeoutException ? ApiErrorCode.timeout : ApiErrorCode.networkError,
         message: e.toString(),
       );
-      return ApiResponse.error(message: error.userMessage);
+      return ApiResponse.error(messageDetail: error.userMessage);
     }
   }
 
@@ -237,6 +249,11 @@ class HttpService {
       final sanitizedBody = _sanitizeBodyForLog(baseUrl + path, response.body);
       developer.log('Response Body: $sanitizedBody', name: 'HttpService');
 
+      Map<String, dynamic> json;
+      String? messageDetail;
+      String message = '';
+      int code = ApiErrorCode.unknown;
+      
       if (response.statusCode == 401) {
         AppLogger.error(
           'Authentication error: 401 Unauthorized',
@@ -244,27 +261,37 @@ class HttpService {
           error: 'Session expired',
         );
 
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
+        // Intentar parsear el body para obtener messageDetail del backend
+        try {
+          json = jsonDecode(response.body) as Map<String, dynamic>;
+          messageDetail = json['messageDetail'] as String?;
+        } catch (_) {
+          // Si no se puede parsear, usar null
+        }
+
+        await _handleSessionExpired(
+          suppressAuthHandling: suppressAuthHandling,
+          messageDetail: messageDetail,
+        );
 
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: messageDetail, // Usar messageDetail del backend si existe
           content: null,
         );
       }
 
-      Map<String, dynamic> json;
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
+        // NO generar mensaje nosotros, dejar que el backend lo proporcione
         return ApiResponse.error(
-          message: ApiError.serverError('Respuesta inválida del servidor').userMessage
+          messageDetail: null,
         );
       }
 
-      final code = json['code'] as int? ?? ApiErrorCode.SERVER_ERROR;
-      final message = json['message'] as String? ?? '';
-      final messageDetail = json['messageDetail'] as String?;
+      code = json['code'] as int? ?? ApiErrorCode.unknown;
+      message = json['message'] as String? ?? '';
+      messageDetail = json['messageDetail'] as String?;
 
       // Manejar código especial (60): tratar como éxito PERO conservar el contenido del backend
       if (message.contains('(60)')) {
@@ -277,7 +304,7 @@ class HttpService {
       }
 
       // Si el backend respondió sesión expirada en el body
-      if (code == ApiErrorCode.SESSION_EXPIRED || code == ApiErrorCode.INVALID_TOKEN) {
+if (code == ApiErrorCode.sessionExpired || code == ApiErrorCode.invalidToken) {
         await _handleSessionExpired(
           suppressAuthHandling: suppressAuthHandling,
           message: message,
@@ -285,8 +312,7 @@ class HttpService {
         );
 
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: messageDetail ?? '',  // Use backend message
           content: null,
         );
       }
@@ -294,25 +320,24 @@ class HttpService {
       // Si el código no es 0 (éxito) o 1 (warning), es un error
       if (code > 1) {
         return ApiResponse.error(
-          message: messageDetail ?? message,
-          messageDetail: messageDetail
+          messageDetail: messageDetail ?? ''  // Use backend message
         );
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
       return ApiResponse(
         isSuccessful: true,
-        message: message,
+        message: null,  // No usar message para mensajes de éxito
         messageDetail: messageDetail,
         content: fromJson(json),
       );
     } catch (e) {
       AppLogger.error('Error en POST request', error: e, source: 'HttpService');
       final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
+        code: e is TimeoutException ? ApiErrorCode.timeout : ApiErrorCode.networkError,
         message: e.toString(),
       );
-      return ApiResponse.error(message: error.userMessage);
+      return ApiResponse.error(messageDetail: error.userMessage);
     }
   }
 
@@ -339,6 +364,11 @@ class HttpService {
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       developer.log('Response Body: ${response.body}', name: 'HttpService');
 
+      Map<String, dynamic> json;
+      String? messageDetail;
+      String message = '';
+      int code = ApiErrorCode.unknown;
+      
       if (response.statusCode == 401) {
         AppLogger.error(
           'Authentication error: 401 Unauthorized',
@@ -346,27 +376,36 @@ class HttpService {
           error: 'Session expired',
         );
 
-        await _handleSessionExpired(suppressAuthHandling: suppressAuthHandling);
+        // Intentar parsear el body para obtener messageDetail del backend
+        try {
+          json = jsonDecode(response.body) as Map<String, dynamic>;
+          messageDetail = json['messageDetail'] as String?;
+        } catch (_) {
+          // Si no se puede parsear, usar null
+        }
+
+        await _handleSessionExpired(
+          suppressAuthHandling: suppressAuthHandling,
+          messageDetail: messageDetail,
+        );
         
         return ApiResponse.error(
-          message: 'Tu sesión ha expirado',
-          messageDetail: 'Por favor, inicia sesión nuevamente',
+          messageDetail: messageDetail, // Usar messageDetail del backend si existe
           content: null,
         );
       }
 
-      Map<String, dynamic> json;
       try {
         json = jsonDecode(response.body) as Map<String, dynamic>;
       } catch (_) {
         return ApiResponse.error(
-          message: ApiError.serverError('Respuesta inválida del servidor').userMessage
+          messageDetail: null // No generar mensaje, dejar que el backend lo proporcione
         );
       }
 
-      final code = json['code'] as int? ?? ApiErrorCode.SERVER_ERROR;
-      final message = json['message'] as String? ?? '';
-      final messageDetail = json['messageDetail'] as String?;
+      code = json['code'] as int? ?? ApiErrorCode.unknown;
+      message = json['message'] as String? ?? '';
+      messageDetail = json['messageDetail'] as String?;
 
       // Si el código no es 0 (éxito) o 1 (warning), es un error
       if (code > 1) {
@@ -376,7 +415,7 @@ class HttpService {
           name: 'HttpService',
           error: error,
         );
-        return ApiResponse.error(message: error.userMessage);
+        return ApiResponse.error(messageDetail: error.userMessage);
       }
 
       // Aquí ya sabemos que la respuesta es exitosa
@@ -394,10 +433,10 @@ class HttpService {
     } catch (e) {
       AppLogger.error('Error en PUT request', error: e, source: 'HttpService');
       final error = ApiError(
-        code: e is TimeoutException ? ApiErrorCode.TIMEOUT : ApiErrorCode.NETWORK_ERROR,
+        code: e is TimeoutException ? ApiErrorCode.timeout : ApiErrorCode.networkError,
         message: e.toString(),
       );
-      return ApiResponse.error(message: error.userMessage);
+      return ApiResponse.error(messageDetail: error.userMessage);
     }
   }
 }

@@ -8,7 +8,6 @@ import '../providers/auth_provider.dart';
 import '../models/auth_models.dart';
 import '../models/transport_cube_details.dart';
 import '../models/operation_models.dart';
-import '../presentation/helpers/error_helper.dart';
 import 'transport_cube_details_base_screen.dart';
 
 /// Pantalla de detalles para cubo en despacho a cliente
@@ -120,15 +119,15 @@ class _ClientDispatchDetailsScreenState
             Autocomplete<int>(
               key: ValueKey(guideProvider.selectedSubcourierId),
               fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                void _showAllOptions() {
+                void showAllOptions() {
                   if (!focusNode.hasFocus) {
                     focusNode.requestFocus();
                   }
                   // Forzar un cambio para que Autocomplete abra el overlay
                   final original = textEditingController.text;
                   textEditingController.value = textEditingController.value.copyWith(
-                    text: original + ' ',
-                    selection: TextSelection.collapsed(offset: (original + ' ').length),
+                    text: '$original ',
+                    selection: TextSelection.collapsed(offset: original.length + 1),
                   );
                   Future.microtask(() {
                     textEditingController.value = textEditingController.value.copyWith(
@@ -162,7 +161,7 @@ class _ClientDispatchDetailsScreenState
                         IconButton(
                           icon: const Icon(Icons.arrow_drop_down),
                           tooltip: 'Ver todos',
-                          onPressed: _showAllOptions,
+                          onPressed: showAllOptions,
                         ),
                       ],
                     ),
@@ -301,9 +300,14 @@ class _ClientDispatchDetailsScreenState
   /// Confirmar despacho
   Future<void> _confirmDispatch(BuildContext context) async {
     AppLogger.log('Iniciando proceso de despacho', source: 'ClientDispatchDetailsScreen');
-    final selectedSubcourierId =
-        context.read<GuideProvider>().selectedSubcourierId;
+    final guideProvider = context.read<GuideProvider>();
+    final selectedSubcourierId = guideProvider.selectedSubcourierId;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    
     if (selectedSubcourierId == null) return;
+
+    final transportCubeProvider = context.read<TransportCubeProvider>();
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -328,16 +332,16 @@ class _ClientDispatchDetailsScreenState
 
     if (confirmed != true || !mounted) return;
 
-    final details = context.read<TransportCubeProvider>().selectedCubeDetails;
-    if (details == null) return;
+    final cubeDetails = transportCubeProvider.selectedCubeDetails;
+    if (cubeDetails == null) return;
 
     try {
-      final guides = List<String>.from(details.guides.map((g) => g.packageCode));
+      final guides = List<String>.from(cubeDetails.guides.map((g) => g.packageCode));
       final request = DispatchGuideToClientRequest(
         subcourierId: selectedSubcourierId,
         guides: guides,
       );
-      final response = await context.read<GuideProvider>().dispatchToClient(request);
+      final response = await guideProvider.dispatchToClient(request);
 
       if (!mounted) return;
       AppLogger.log(
@@ -350,11 +354,11 @@ class _ClientDispatchDetailsScreenState
       if (response.isSuccessful) {
         // Limpiar el estado de la guía despachada
         for (final guide in guides) {
-          context.read<GuideProvider>().removeGuideUiState(guide);
+          guideProvider.removeGuideUiState(guide);
         }
 
         // Recargar la lista para que se actualice
-        await context.read<GuideProvider>().loadGuides(
+        await guideProvider.loadGuides(
           page: 1,
           pageSize: 50,
           status: 'DispatchedFromCustomsWithOutCube,ReceivedInLocalWarehouse',
@@ -362,8 +366,8 @@ class _ClientDispatchDetailsScreenState
         );
 
         if (!mounted) return;
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        navigator.pop();
+        messenger.showSnackBar(
           SnackBar(
             content: Row(
               children: [
@@ -375,15 +379,10 @@ class _ClientDispatchDetailsScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        response.messageDetail ?? response.message ?? 'Guías despachadas exitosamente',
+                        response.messageDetail ?? '',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      Text(
-                        'Las guías están listas para entrega al cliente final',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withOpacity(0.9)
-                        ),
-                      ),
+                      // Removed hardcoded status message - should come from backend
                     ],
                   ),
                 ),
@@ -396,16 +395,21 @@ class _ClientDispatchDetailsScreenState
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
-            content: Text(response.messageDetail ?? response.message ?? '❌ Error al despachar guías'),
+            content: Text(response.messageDetail ?? ''),
             backgroundColor: Colors.red,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ErrorHelper.showErrorSnackBar(context, e);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }

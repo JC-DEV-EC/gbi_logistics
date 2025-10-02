@@ -31,10 +31,12 @@ class CustomsDispatchScreen extends StatefulWidget {
 class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
   Future<void> _createNewCube(List<String> guides) async {
     final provider = context.read<TransportCubeProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       // Refrescar token primero
-      final refreshed = await context.read<AuthProvider>().ensureFreshToken();
+      final refreshed = await authProvider.ensureFreshToken();
       developer.log(
         'Token refresh before create cube - Refreshed/Valid: $refreshed',
         name: 'CustomsDispatchScreen',
@@ -44,14 +46,10 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       final response = await provider.createTransportCube(guides);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
-            response.messageDetail ??
-                response.message ??
-                (response.isSuccessful
-                    ? 'Cubo creado correctamente'
-                    : 'Error al crear cubo'),
+            response.messageDetail ?? '',
           ),
           backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
         ),
@@ -63,9 +61,9 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text('Error inesperado: $e'),
+          content: Text(''),  // Let backend provide error message
           backgroundColor: Colors.red,
         ),
       );
@@ -118,18 +116,18 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
           if (hasSelectedCubes)
             TextButton.icon(
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                
                 // Enviar cubos seleccionados a estado Tránsito en Bodega (Sent)
                 final resp = await provider.changeSelectedCubesState(
-                  TransportCubeState.SENT,
+                  TransportCubeState.sent,
                 );
                 if (!mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(
-                      resp.messageDetail ??
-                          resp.message ??
-                          'Operación completada',
+                      resp.messageDetail ?? '',
                     ),
                     backgroundColor:
                     resp.isSuccessful ? Colors.green : Colors.red,
@@ -161,14 +159,51 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
     );
   }
 
+  Future<bool> _confirmCloseDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (confirmCtx) => AlertDialog(
+        title: const Text('¿Cerrar ventana?'),
+        content: const Text('¿Está seguro que desea cerrar esta ventana? Se perderán las guías escaneadas.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(confirmCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(confirmCtx, true),
+            child: const Text('Sí, cerrar'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _showCustomsDispatchDialog() async {
     // Guardar el context padre (de la pantalla) para usarlo después del pop
     final parentContext = context;
 
     await showDialog<void>(
       context: parentContext,
+      barrierDismissible: false, // No cerrar al tocar fuera del diálogo
       builder: (dialogCtx) => AlertDialog(
-        title: const Text('Crear Nuevo Cubo'),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Crear Nuevo Cubo'),
+            IconButton(
+              tooltip: 'Cerrar',
+              onPressed: () async {
+                if (await _confirmCloseDialog(dialogCtx)) {
+                  if (!dialogCtx.mounted) return;
+                  Navigator.pop(dialogCtx);
+                }
+              },
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
         content: SizedBox(
           width: MediaQuery.of(parentContext).size.width * 0.8,
           child: CustomsDispatchScanBox(
@@ -183,34 +218,33 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
                 // Solo actualizar estado de las guías a DispatchedFromCustoms
                 // sin ninguna relación con cubos
                 final guideProvider = parentContext.read<GuideProvider>();
+                final messenger = ScaffoldMessenger.of(parentContext);
                 final request = UpdateGuideStatusRequest(
                   guides: guides,
                   newStatus: TrackingStateType.dispatchedFromCustoms,
                 );
                 final resp = await guideProvider.updateGuideStatus(request);
 
+                if (!mounted) return;
+
                 // Siempre mostrar el messageDetail del servidor si existe
                 final serverMessage = resp.messageDetail ?? resp.message ?? '';
-                final bool hasFailedGuides = !resp.isSuccessful || serverMessage.isNotEmpty;
 
                 // Determinar color basado en la respuesta
-                final Color feedbackColor = !resp.isSuccessful ? Colors.red : Colors.green;
+                final Color feedbackColor = !resp.isSuccessful
+                    ? Colors.red
+                    : Colors.green;
 
-                // Construir mensaje respetando el messageDetail del servidor
-                String feedbackMessage = serverMessage;
-                if (feedbackMessage.isEmpty) {
-                    feedbackMessage = resp.isSuccessful 
-                        ? 'Se actualizaron ${guides.length} guías correctamente'
-                        : 'Error al actualizar las guías';
-                }
+                // Use only server's messageDetail
+                String feedbackMessage = resp.messageDetail ?? '';
 
-                // Mostrar feedback usando el context padre (no el del diálogo)
-                ScaffoldMessenger.of(parentContext).showSnackBar(
+                // Mostrar feedback usando el ScaffoldMessenger capturado
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(feedbackMessage),
                     backgroundColor: feedbackColor,
                     // Dar más tiempo si hay mensaje detallado del servidor
-                    duration: serverMessage.isNotEmpty 
+                    duration: serverMessage.isNotEmpty
                         ? const Duration(seconds: 10)
                         : const Duration(seconds: 4),
                   ),
@@ -219,12 +253,6 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
             },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancelar'),
-          ),
-        ],
       ),
     );
   }

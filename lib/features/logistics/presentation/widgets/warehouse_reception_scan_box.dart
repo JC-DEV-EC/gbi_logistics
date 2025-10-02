@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/operation_models.dart';
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
@@ -10,20 +11,21 @@ import '../../services/app_sounds.dart';
 class WarehouseReceptionScanBox extends StatefulWidget {
   final Function(List<String>) onComplete;
 
-  const WarehouseReceptionScanBox({
-    super.key,
-    required this.onComplete,
-  });
+  const WarehouseReceptionScanBox({super.key, required this.onComplete});
 
   @override
-  State<WarehouseReceptionScanBox> createState() => _WarehouseReceptionScanBoxState();
+  State<WarehouseReceptionScanBox> createState() =>
+      _WarehouseReceptionScanBoxState();
 }
 
 class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
+  // Controllers y focus
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final Set<String> _scannedGuides = {};
   final ScanController _scanController = ScanController();
+
+  // Estado interno
+  final Set<String> _scannedGuides = {};
 
   @override
   void initState() {
@@ -39,163 +41,164 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
     super.dispose();
   }
 
+  /// Maneja la entrada de una guía
   Future<void> _handleGuideInput(String? guide) async {
-    if (guide == null || guide.isEmpty) return;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (guide == null || guide.trim().isEmpty) return;
 
     final cleanGuide = guide.trim();
-    if (cleanGuide.isEmpty) return;
 
     await _scanController.processScan(() async {
       try {
-        // Buscar la guía y validar su estado
         final response = await context.read<GuideProvider>().searchGuide(
           cleanGuide,
-          status: TrackingStateType.transitToWarehouse,  // Buscar solo guías en tránsito
+          status: TrackingStateType.transitToWarehouse,
         );
 
         if (!response.isSuccessful || response.content == null) {
           HapticFeedback.heavyImpact();
           await AppSounds.error();
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+
+          scaffoldMessenger.showSnackBar(
             SnackBar(
-              content: Text(response.messageDetail ?? response.message ?? 'Error al procesar guía'),
+              content: Text(response.messageDetail ?? ''),
               backgroundColor: Colors.red,
-              duration: const Duration(seconds: 10),
+              duration: const Duration(seconds: 4),
             ),
           );
         } else {
-          // La guía existe y está en el estado correcto
-          setState(() {
-            _scannedGuides.add(cleanGuide);
-          });
-          await AppSounds.success();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.messageDetail ?? response.message ?? 'Guía validada'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          if (_scannedGuides.contains(cleanGuide)) {
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(response.messageDetail ?? ''),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          } else {
+            setState(() => _scannedGuides.add(cleanGuide));
+            try {
+              await AppSounds.success().timeout(const Duration(seconds: 2));
+            } catch (_) {}
+            if (!mounted) return;
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(response.messageDetail ?? ''),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         }
-      } catch (e) {
+      } catch (_) {
         if (!mounted) return;
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
         await AppSounds.error();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error inesperado: $e'),
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Error al procesar la guía'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
+            duration: Duration(seconds: 4),
           ),
         );
       } finally {
-        _controller.clear();
-        // Mantener el foco
-        Future.microtask(() {
-          if (!_focusNode.hasFocus) {
-            _focusNode.requestFocus();
-          }
-        });
+        if (mounted) {
+          _controller.clear();
+          Future.microtask(() {
+            if (!_focusNode.hasFocus) _focusNode.requestFocus();
+          });
+        }
       }
     });
   }
 
+  /// Completa el proceso de recepción
   Future<void> _complete() async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     if (_scannedGuides.isEmpty) return;
 
     final provider = context.read<GuideProvider>();
     final guides = _scannedGuides.toList();
 
-    // Hacer un solo request con todas las guías
     final request = UpdateGuideStatusRequest(
       guides: guides,
       newStatus: TrackingStateType.receivedInLocalWarehouse,
     );
 
-    final response = await provider.updateGuideStatus(request);
+    debugPrint('[DEBUG] Enviando request con newStatus: "${TrackingStateType.receivedInLocalWarehouse}"');
+    debugPrint('[DEBUG] Guides: ${guides.join(", ")}');
 
+    final response = await provider.updateGuideStatus(request);
     if (!mounted) return;
 
-    // Analizar la respuesta para identificar guías que no se pudieron actualizar
-    final Set<String> failed = {};
-    final detail = (response.messageDetail ?? response.message ?? '').toString();
-    if (detail.isNotEmpty) {
-      // Si el mensaje menciona guías específicas, extraerlas
-      final regex = RegExp(r'\b\d{5,}\b');
-      final failedGuides = regex.allMatches(detail).map((m) => m.group(0)!).toSet();
-      failed.addAll(failedGuides);
-    }
+    debugPrint('[DEBUG] Respuesta backend: ${response.isSuccessful}, ${response.message}, ${response.messageDetail}');
 
-    // Las guías que no están en failed son las que se procesaron con éxito
-    final succeeded = guides.where((code) => !failed.contains(code)).toList();
+    if (response.isSuccessful) {
+      await Future.delayed(const Duration(milliseconds: 1000));
 
-    // Enviar al callback solo las guías exitosas
-    if (succeeded.isNotEmpty) {
-      widget.onComplete(succeeded);
-    }
+      bool anyChanged = false;
+        final verifyProvider = provider;
 
-    // Mantener en pantalla solo las guías que fallaron
-    setState(() {
-      _scannedGuides
-        ..clear()
-        ..addAll(failed);
-    });
+      for (final guide in guides) {
+        final verifyResponse = await verifyProvider.searchGuide(
+          guide,
+          status: TrackingStateType.receivedInLocalWarehouse,
+        );
 
-    // Mostrar resumen con detalles
-    final total = guides.length;
-    final okCount = succeeded.length;
-    final failCount = failed.length;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              failCount == 0
-                ? '✅ Se actualizaron las $total guías'
-                : '⚠️ $okCount guías actualizadas, $failCount pendientes',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (failCount > 0 && detail.isNotEmpty) ...[  
-              const SizedBox(height: 4),
-              Text(
-                detail,
-                style: const TextStyle(fontSize: 13),
-              ),
-            ],
-          ],
-        ),
-        backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
-        duration: Duration(seconds: failCount > 0 ? 8 : 4),  // Más tiempo si hay fallos
-      ),
-    );
-
-    // Mantener el foco del escáner
-    Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
+        if (verifyResponse.isSuccessful && verifyResponse.content != null) {
+          anyChanged = true;
+          debugPrint('[DEBUG] Guía $guide confirmada en estado ReceivedInLocalWarehouse');
+          break;
+        }
       }
+
+      if (anyChanged) {
+        widget.onComplete(guides);
+        setState(() => _scannedGuides.clear());
+
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(response.messageDetail ?? ''),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        debugPrint('[DEBUG] Backend dijo exitoso pero las guías no cambiaron de estado');
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(response.messageDetail ?? ''),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(response.messageDetail ?? ''),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) _focusNode.requestFocus();
     });
   }
 
-  void _removeGuide(String guide) {
-    setState(() {
-      _scannedGuides.remove(guide);
-    });
-  }
+  /// Elimina una guía de la lista
+  void _removeGuide(String guide) => setState(() => _scannedGuides.remove(guide));
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Asegurar que siempre tenemos el foco
+    // Mantener foco en el campo
     Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
+      if (!_focusNode.hasFocus) _focusNode.requestFocus();
     });
 
     return Column(
@@ -205,7 +208,9 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
         // Campo de entrada
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5)),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 128),
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
@@ -218,7 +223,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
-                color: theme.colorScheme.primary,
+                color: theme.colorScheme.primary.withValues(alpha: 128),
               ),
             ),
             onChanged: (value) {
@@ -232,8 +237,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
 
         if (_scannedGuides.isNotEmpty) ...[
           const SizedBox(height: 16),
-          
-          // Botón de actualizar estado
+
           FilledButton.icon(
             onPressed: _complete,
             icon: const Icon(Icons.done),
@@ -241,7 +245,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
           ),
 
           const SizedBox(height: 16),
-          
+
           // Lista de guías escaneadas
           Container(
             decoration: BoxDecoration(
@@ -252,7 +256,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
             child: ListView.separated(
               padding: const EdgeInsets.all(8),
               itemCount: _scannedGuides.length,
-              separatorBuilder: (context, index) => const Divider(),
+              separatorBuilder: (_, __) => const Divider(),
               itemBuilder: (context, index) {
                 final guide = _scannedGuides.elementAt(index);
                 return ListTile(

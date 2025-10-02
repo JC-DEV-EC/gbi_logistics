@@ -7,35 +7,35 @@ import 'package:flutter/material.dart';
 /// Estados válidos para cubos de transporte según la API
 class TransportCubeState {
   /// Estado cuando el cubo es creado en despacho de aduana
-  static const String CREATED = 'Created';
+  static const String created = 'Created';
 
   /// Estado cuando el cubo es enviado a tránsito en bodega
-  static const String SENT = 'Sent';
+  static const String sent = 'Sent';
 
   /// Estado cuando el cubo está en recepción en bodega
-  static const String DOWNLOADING = 'Downloading';
+  static const String downloading = 'Downloading';
 
   /// Estado cuando el cubo está listo para despacho a cliente
-  static const String DOWNLOADED = 'Downloaded';
+  static const String downloaded = 'Downloaded';
 
   /// Lista de todos los estados posibles
   static const List<String> values = [
-    CREATED,
-    SENT,
-    DOWNLOADING,
-    DOWNLOADED,
+    created,
+    sent,
+    downloading,
+    downloaded,
   ];
 
   /// Obtiene la etiqueta amigable para mostrar al usuario
   static String getLabel(String state) {
     switch (state) {
-      case CREATED:
+      case created:
         return 'Despacho en Aduana';
-      case SENT:
+      case sent:
         return 'Tránsito en Bodega';
-      case DOWNLOADING:
+      case downloading:
         return 'Recepción en Bodega';
-      case DOWNLOADED:
+      case downloaded:
         return 'Despacho a Cliente';
       default:
         return 'Desconocido';
@@ -45,13 +45,13 @@ class TransportCubeState {
   /// Color sugerido para UI por estado
   static int getColor(String state) {
     switch (state) {
-      case CREATED:
+      case created:
         return 0xFF1976D2; // Azul
-      case SENT:
+      case sent:
         return 0xFFF57C00; // Naranja
-      case DOWNLOADING:
+      case downloading:
         return 0xFF7B1FA2; // Morado
-      case DOWNLOADED:
+      case downloaded:
         return 0xFF2E7D32; // Verde
       default:
         return 0xFF9E9E9E; // Gris
@@ -61,13 +61,13 @@ class TransportCubeState {
   /// Ícono sugerido para UI por estado
   static IconData getIcon(String state) {
     switch (state) {
-      case CREATED:
+      case created:
         return Icons.local_shipping;
-      case SENT:
+      case sent:
         return Icons.directions_run;
-      case DOWNLOADING:
+      case downloading:
         return Icons.downloading;
-      case DOWNLOADED:
+      case downloaded:
         return Icons.check_circle;
       default:
         return Icons.info_outline;

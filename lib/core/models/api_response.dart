@@ -20,8 +20,8 @@ class ApiResponse<T> {
   }) {
     return ApiResponse(
       isSuccessful: false,
-      message: message,
-      messageDetail: messageDetail,
+      message: null,  // No usar message para errores, solo messageDetail
+      messageDetail: messageDetail ?? message,  // Si no hay messageDetail, usar message como fallback
       content: content,
     );
   }
@@ -34,8 +34,8 @@ class ApiResponse<T> {
   }) {
     return ApiResponse(
       isSuccessful: true,
-      message: message,
-      messageDetail: messageDetail,
+      message: null,  // No usar message para mensajes de éxito
+      messageDetail: messageDetail ?? message,  // Si no hay messageDetail, usar message como fallback
       content: content,
     );
   }

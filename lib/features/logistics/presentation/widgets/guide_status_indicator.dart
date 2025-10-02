@@ -35,7 +35,7 @@ final iconData = GuideTransportCubeState.getIcon(state);
           Text(
             stateLabel,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onBackground,
+            color: theme.colorScheme.onSurface,
             ),
           ),
         ],

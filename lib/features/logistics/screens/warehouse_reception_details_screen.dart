@@ -5,7 +5,6 @@ import '../presentation/constants/visual_states.dart';
 import '../models/transport_cube_details.dart';
 import '../models/operation_models.dart';
 import '../providers/guide_provider.dart';
-import '../presentation/helpers/error_helper.dart';
 import '../presentation/widgets/warehouse_reception_scan_box.dart';
 import 'transport_cube_details_base_screen.dart';
 
@@ -75,14 +74,15 @@ class _WarehouseReceptionDetailsScreenState extends TransportCubeDetailsBaseScre
                   newStatus: TrackingStateType.receivedInLocalWarehouse,
                 );
 
-                final response = await context.read<GuideProvider>().updateGuideStatus(request);
+                final guideProvider = context.read<GuideProvider>();
+                final messenger = ScaffoldMessenger.of(context);
+                final response = await guideProvider.updateGuideStatus(request);
                 
                 if (!mounted) return;
 
                 // Mostrar mensaje del backend (éxito o error)
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(response.messageDetail ?? response.message ?? 
-                    (response.isSuccessful ? 'Guías actualizadas correctamente' : 'Error al actualizar guías')),
+                messenger.showSnackBar(SnackBar(
+                  content: Text(response.messageDetail ?? ''),
                   backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
                 ));
 
@@ -99,7 +99,8 @@ class _WarehouseReceptionDetailsScreenState extends TransportCubeDetailsBaseScre
   }
 
   Future<void> _showHistory() async {
-    final history = await context.read<TransportCubeProvider>().getCubeHistory(widget.cubeId);
+    final transportProvider = context.read<TransportCubeProvider>();
+    final history = await transportProvider.getCubeHistory(widget.cubeId);
 
     if (!mounted) return;
 
@@ -133,6 +134,10 @@ class _WarehouseReceptionDetailsScreenState extends TransportCubeDetailsBaseScre
 
 
   Future<void> _confirmFinishDownload(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final transportProvider = context.read<TransportCubeProvider>();
+    final navigator = Navigator.of(context);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -157,22 +162,27 @@ class _WarehouseReceptionDetailsScreenState extends TransportCubeDetailsBaseScre
     if (confirmed != true || !mounted) return;
 
     try {
-      final resp = await context.read<TransportCubeProvider>().changeSelectedCubesState(
+      final resp = await transportProvider.changeSelectedCubesState(
                 VisualStates.downloaded,
       );
 
       if (resp.isSuccessful && mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        navigator.pop();
+        messenger.showSnackBar(
           SnackBar(
-            content: Text(resp.messageDetail ?? resp.message ?? '✅ Descarga finalizada'),
+            content: Text(resp.messageDetail ?? ''),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ErrorHelper.showErrorSnackBar(context, e);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }

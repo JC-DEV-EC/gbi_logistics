@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
 import '../../services/app_sounds.dart';
@@ -25,44 +26,152 @@ class GuideScanBox extends StatefulWidget {
 }
 
 class _GuideScanBoxState extends State<GuideScanBox> {
+  // Controllers
   final TextEditingController _controller = TextEditingController();
-  final Set<String> _scannedGuides = {};
-  bool _canComplete = false;
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
 
+  // Estado interno
+  final Set<String> _scannedGuides = {};
+  bool _canComplete = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    _scanController.dispose();
+    super.dispose();
+  }
+
+  /// Completa el proceso y ejecuta callback con las guías escaneadas
   Future<void> _complete() async {
     if (_canComplete && _scannedGuides.isNotEmpty) {
-      // Procesar todas las guías en un solo request
       final guides = _scannedGuides.toList();
-
-      // Llamar al callback con todas las guías
       widget.onComplete(guides);
 
-      // Limpiar la lista después de validar
       setState(() {
         _scannedGuides.clear();
         _canComplete = false;
       });
 
-      // Mantener el foco del escáner
       Future.microtask(() {
-        if (!_focusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
+        if (!_focusNode.hasFocus) _focusNode.requestFocus();
       });
     }
+  }
+
+  /// Procesa el ingreso de una guía
+  Future<void> _handleGuideInput(String? guide) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (guide == null || guide.isEmpty) return;
+    final cleanGuide = guide.trim();
+    if (cleanGuide.isEmpty) return;
+
+    await _scanController.processScan(() async {
+      try {
+        if (widget.searchStatus != null) {
+          // Con validación contra el backend
+          final provider = context.read<GuideProvider>();
+          final guideProvider = provider;
+          final response = await provider.searchGuide(
+            cleanGuide,
+            status: widget.searchStatus!,
+          );
+
+          final result = response.content;
+          if (result != null) {
+            if (result.stateLabel == widget.searchStatus) {
+              final isValidated = guideProvider.getGuideUiState(cleanGuide) == 'validated';
+
+              if (!isValidated) {
+                setState(() {
+                  _scannedGuides.add(cleanGuide);
+                  _canComplete = _scannedGuides.isNotEmpty;
+                });
+                await AppSounds.success();
+                widget.onChanged?.call(_scannedGuides.toList());
+              } else {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text(response.messageDetail ?? 'La guía ya está validada'),
+                    backgroundColor: Colors.blue,
+                  ),
+                );
+              }
+              _controller.clear();
+            } else {
+              HapticFeedback.heavyImpact();
+              await AppSounds.error();
+
+              if (!mounted) return;
+              scaffoldMessenger.showSnackBar(
+                SnackBar(
+                  content: Text(response.messageDetail ?? 'La guía está en otro estado'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
+          } else {
+            HapticFeedback.heavyImpact();
+            await AppSounds.error();
+
+            if (!mounted) return;
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(response.messageDetail ?? 'No se encontró la guía'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } else {
+          // Sin validación contra backend, solo expectedGuides
+          if (widget.expectedGuides.contains(cleanGuide)) {
+            setState(() {
+              _scannedGuides.add(cleanGuide);
+              _canComplete = _scannedGuides.isNotEmpty;
+            });
+
+            SystemSound.play(SystemSoundType.click);
+            widget.onChanged?.call(_scannedGuides.toList());
+          } else if (cleanGuide.length >= 9) {
+            HapticFeedback.heavyImpact();
+            await AppSounds.error();
+          }
+        }
+      } catch (_) {
+        if (mounted) {
+          await AppSounds.error();
+          scaffoldMessenger.showSnackBar(
+            const SnackBar(
+              content: Text('Error al procesar la guía'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        _controller.clear();
+        Future.microtask(() {
+          if (!_focusNode.hasFocus) _focusNode.requestFocus();
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Asegurar que siempre tenemos el foco
+    // Mantener foco
     Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
+      if (!_focusNode.hasFocus) _focusNode.requestFocus();
     });
 
     return Column(
@@ -72,8 +181,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
         // Campo de entrada
         Container(
           decoration: BoxDecoration(
-            border: Border.all(
-                color: theme.colorScheme.primary.withOpacity(0.5)),
+            border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 128)),
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
@@ -82,20 +190,19 @@ class _GuideScanBoxState extends State<GuideScanBox> {
             autofocus: true,
             decoration: InputDecoration(
               hintText: 'Escanee o ingrese el código de la guía',
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
-                color: theme.colorScheme.primary,
+                color: theme.colorScheme.primary.withValues(alpha: 128),
               ),
             ),
+            onSubmitted: _handleGuideInput,
             onChanged: (value) {
-              if (value.endsWith('\\n')) {
-                _handleGuideInput(value.replaceAll('\\n', ''));
+              if (value.endsWith('\n')) {
+                _handleGuideInput(value.replaceAll('\n', ''));
               }
             },
-            onSubmitted: _handleGuideInput,
           ),
         ),
 
@@ -114,13 +221,13 @@ class _GuideScanBoxState extends State<GuideScanBox> {
 
         if (_scannedGuides.isNotEmpty) ...[
           const SizedBox(height: 16),
-          // Indicador de progreso
+
+          // Resumen
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Guías verificadas: ${_scannedGuides.length}/${widget
-                    .expectedGuides.length}',
+                'Guías verificadas: ${_scannedGuides.length}/${widget.expectedGuides.length}',
                 style: theme.textTheme.titleSmall,
               ),
             ],
@@ -128,7 +235,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
 
           const SizedBox(height: 8),
 
-          // Lista de guías escaneadas
+          // Chips con guías escaneadas
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 120),
             child: SingleChildScrollView(
@@ -142,8 +249,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
                       style: const TextStyle(color: Colors.white),
                     ),
                     backgroundColor: theme.colorScheme.primary,
-                    deleteIcon: const Icon(
-                        Icons.check, size: 18, color: Colors.white),
+                    deleteIcon: const Icon(Icons.check, size: 18, color: Colors.white),
                     onDeleted: () {},
                   );
                 }).toList(),
@@ -154,133 +260,4 @@ class _GuideScanBoxState extends State<GuideScanBox> {
       ],
     );
   }
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.requestFocus();
-  }
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    _controller.dispose();
-    _scanController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleGuideInput(String? guide) async {
-    if (guide == null || guide.isEmpty) return;
-
-    final cleanGuide = guide.trim();
-    if (cleanGuide.isEmpty) return;
-
-    await _scanController.processScan(() async {
-      try {
-        // Si tiene searchStatus, buscar en servidor
-        if (widget.searchStatus != null) {
-          final provider = context.read<GuideProvider>();
-
-          // Buscar la guía en el servidor
-          final response = await provider.searchGuide(
-            cleanGuide,
-            status: widget.searchStatus!,
-          );
-
-          final result = response.content;
-
-          if (result != null) {
-            // La guía existe, verificar su estado
-            if (result.stateLabel == widget.searchStatus) {
-              // Solo agregar si no está validada
-              final isValidated = provider.getGuideUiState(cleanGuide) ==
-                  'validated';
-
-              if (!isValidated) {
-                setState(() {
-                  _scannedGuides.add(cleanGuide);
-                  _canComplete = _scannedGuides.isNotEmpty;
-                });
-
-                // Reproducir sonido de éxito
-await AppSounds.success();
-
-                // Notificar cambios
-                widget.onChanged?.call(_scannedGuides.toList());
-              } else {
-                // Mostrar mensaje de que ya está validada
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'ℹ️ Guía $cleanGuide ya está validada para despacho'),
-                    backgroundColor: Colors.blue,
-                  ),
-                );
-              }
-
-              _controller.clear();
-            } else {
-            // La guía existe pero está en otro estado
-              HapticFeedback.heavyImpact();
-await AppSounds.error();
-              
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('⚠️ La guía $cleanGuide no puede ser procesada porque está en estado ${result.stateLabel}'),
-                  backgroundColor: Colors.orange,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            }
-          } else {
-            HapticFeedback.heavyImpact();
-await AppSounds.error();
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(response.messageDetail ?? response.message ?? 'Error al procesar guía'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-        } else {
-          // Comportamiento original para otros estados
-          if (widget.expectedGuides.contains(cleanGuide)) {
-            setState(() {
-              _scannedGuides.add(cleanGuide);
-              _canComplete = _scannedGuides.isNotEmpty;
-            });
-
-            SystemSound.play(SystemSoundType.click);
-            widget.onChanged?.call(_scannedGuides.toList());
-
-            _controller.clear();
-          } else if (cleanGuide.length >= 9) {
-            HapticFeedback.heavyImpact();
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-await AppSounds.error();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Error al procesar guía: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        _controller.clear();
-        // Mantener el foco después de procesar cada guía
-        Future.microtask(() {
-          if (!_focusNode.hasFocus) {
-            _focusNode.requestFocus();
-          }
-        });
-      }
-    });
-  }
-
 }

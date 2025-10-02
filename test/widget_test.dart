@@ -7,11 +7,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:animate_do/animate_do.dart';
 
 import 'package:gbi_logistics/main.dart';
 import 'package:gbi_logistics/features/logistics/screens/login_screen.dart';
-import 'package:gbi_logistics/core/services/storage_service.dart';
 
 void main() {
   group('Integration Tests', () {

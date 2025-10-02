@@ -63,8 +63,8 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
 
     // Procesar todas las guías en un solo request
     final guides = _scannedGuides.toList();
-    
-    // Llamar al callback y esperar la respuesta
+
+    // Llamar al callback
     widget.onComplete(guides, createCube);
 
     // Limpiar la lista de guías escaneadas
@@ -106,25 +106,25 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
           // Campo de entrada
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5)),
+              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 128)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
-            autofocus: true,
-            decoration: InputDecoration(
+              autofocus: true,
+              decoration: InputDecoration(
                 hintText: 'Escanee o ingrese el código de la guía',
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: InputBorder.none,
                 suffixIcon: Icon(
                   Icons.qr_code_scanner,
-                  color: theme.colorScheme.primary,
+                  color: theme.colorScheme.primary.withValues(alpha: 128),
                 ),
               ),
               onChanged: (value) {
-                if (value.endsWith('\\n')) {
-                  _handleGuideInput(value.replaceAll('\\n', ''));
+                if (value.endsWith('\n')) {
+                  _handleGuideInput(value.replaceAll('\n', ''));
                 }
               },
               onSubmitted: _handleGuideInput,
@@ -133,7 +133,7 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
 
           if (_scannedGuides.isNotEmpty) ...[
             const SizedBox(height: 16),
-            
+
             // Botones de acción
             Row(
               children: [
@@ -141,7 +141,7 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
                   child: FilledButton.icon(
                     onPressed: () => _complete(createCube: true),
                     icon: const Icon(Icons.add_box),
-                    label: Text('Crear Cubo, (${_scannedGuides.length} guías)'),
+                    label: Text('Crear Cubo (${_scannedGuides.length} guías)'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -159,7 +159,7 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
             ),
 
             const SizedBox(height: 16),
-            
+
             // Lista de guías escaneadas
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 200),

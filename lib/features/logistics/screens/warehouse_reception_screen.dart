@@ -20,60 +20,32 @@ class WarehouseReceptionScreen extends StatelessWidget {
         title: const Text('Recepción en Bodega'),
       ),
       drawer: const AppDrawer(),
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Indicador de carga
-              Consumer<GuideProvider>(
-                builder: (context, provider, _) => provider.isLoading
-                    ? const LinearProgressIndicator()
-                    : const SizedBox.shrink(),
-              ),
-
-              // Caja de escaneo
-              Padding(
-                padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Indicador de carga
+            Consumer<GuideProvider>(
+              builder: (context, provider, _) => provider.isLoading
+                  ? const LinearProgressIndicator()
+                  : const SizedBox.shrink(),
+            ),
+            
+            // Caja de escaneo con Flexible
+            Flexible(
+              flex: 0,
+              fit: FlexFit.loose,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
                 child: Consumer<GuideProvider>(
                   builder: (context, provider, _) {
                     return WarehouseReceptionScanBox(
                       onComplete: (scanned) async {
                         if (scanned.isEmpty) return;
 
-                        // Actualizar directamente a ReceivedInLocalWarehouse
-                        final request = UpdateGuideStatusRequest(
-                          guides: scanned,
-                          newStatus:
-                          TrackingStateType.receivedInLocalWarehouse,
-                        );
-
-                        final response =
-                        await provider.updateGuideStatus(request);
-
+                        // Ya se actualizó el estado dentro del ScanBox.
+                        // Aquí solo recargamos la lista para reflejar cambios.
                         if (!context.mounted) return;
-
-                        // Mostrar mensaje del backend con más detalle
-                        // Siempre mostrar el messageDetail del servidor si existe
-                        final serverMessage = response.messageDetail ?? response.message ?? '';
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              serverMessage.isNotEmpty
-                                ? serverMessage
-                                : response.isSuccessful
-                                    ? 'Se actualizaron ${scanned.length} guías correctamente'
-                                    : 'Error al actualizar las guías',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            backgroundColor: !response.isSuccessful ? Colors.red : Colors.green,
-                            duration: serverMessage.isNotEmpty
-                                ? const Duration(seconds: 10)
-                                : const Duration(seconds: 4),
-                          ),
-                        );
-
-                        // Incluso con errores parciales, recargar para mostrar las actualizadas
                         await provider.loadGuides(
                           page: 1,
                           pageSize: 50,
@@ -84,19 +56,18 @@ class WarehouseReceptionScreen extends StatelessWidget {
                   },
                 ),
               ),
+            ),
 
-              // Lista de guías
-              const SizedBox(
-                height: 300, // Altura fija para la lista
-                child: WarehouseReceptionListScreen(
-                  title: 'Recepción en Bodega',
-                  status: TrackingStateType.transitToWarehouse,
-                  showHistoric: false,
-                  hideValidated: true,
-                ),
+            // Lista de guías - usar espacio restante
+            Expanded(
+              child: const WarehouseReceptionListScreen(
+                title: 'Recepción en Bodega',
+                status: TrackingStateType.transitToWarehouse,
+                showHistoric: false,
+                hideValidated: true,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

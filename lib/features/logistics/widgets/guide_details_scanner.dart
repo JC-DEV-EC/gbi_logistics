@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../presentation/controllers/scan_controller.dart';
-import '../services/app_sounds.dart';
 
 /// Widget de scanner específico para la pantalla de detalles de guía
 class GuideDetailsScannerWidget extends StatefulWidget {
@@ -98,7 +97,7 @@ class _GuideDetailsScannerWidgetState extends State<GuideDetailsScannerWidget> {
         Icon(
           Icons.qr_code_scanner,
           size: 48,
-          color: theme.colorScheme.primary.withOpacity(0.5),
+          color: theme.colorScheme.primary.withValues(alpha: 128),
         ),
         const SizedBox(height: 16),
         
@@ -107,7 +106,7 @@ class _GuideDetailsScannerWidgetState extends State<GuideDetailsScannerWidget> {
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             border: Border.all(
-              color: theme.colorScheme.primary.withOpacity(0.5),
+              color: theme.colorScheme.primary.withValues(alpha: 128),
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -139,7 +138,7 @@ class _GuideDetailsScannerWidgetState extends State<GuideDetailsScannerWidget> {
               if (_isProcessing)
                 Positioned.fill(
                   child: Container(
-                    color: theme.colorScheme.surface.withOpacity(0.8),
+                    color: theme.colorScheme.surface.withValues(alpha: 204),
                     child: const Center(
                       child: SizedBox(
                         width: 24,

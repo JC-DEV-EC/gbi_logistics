@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/transport_cube_provider.dart';
-import '../presentation/constants/visual_states.dart';
 import '../models/transport_cube_details.dart';
-import '../../../core/services/app_logger.dart';
 import 'transport_cube_details_base_screen.dart';
 
 /// Pantalla de detalles para cubo en despacho de aduana
@@ -14,10 +13,13 @@ class CustomsDispatchDetailsScreen extends TransportCubeDetailsBaseScreen {
   });
 
   @override
-  State<CustomsDispatchDetailsScreen> createState() => _CustomsDispatchDetailsScreenState();
+  State<CustomsDispatchDetailsScreen> createState() =>
+      _CustomsDispatchDetailsScreenState();
 }
 
-class _CustomsDispatchDetailsScreenState extends TransportCubeDetailsBaseScreenState<CustomsDispatchDetailsScreen> {
+class _CustomsDispatchDetailsScreenState
+    extends TransportCubeDetailsBaseScreenState<CustomsDispatchDetailsScreen> {
+
   @override
   List<Widget> buildAppBarActions() {
     return [
@@ -72,7 +74,8 @@ class _CustomsDispatchDetailsScreenState extends TransportCubeDetailsBaseScreenS
   }
 
   Future<void> _showHistory() async {
-    final history = await context.read<TransportCubeProvider>().getCubeHistory(widget.cubeId);
+    final history =
+    await context.read<TransportCubeProvider>().getCubeHistory(widget.cubeId);
 
     if (!mounted) return;
 
@@ -102,74 +105,5 @@ class _CustomsDispatchDetailsScreenState extends TransportCubeDetailsBaseScreenS
         ],
       ),
     );
-  }
-
-  Future<void> _confirmSendToTransit(BuildContext context, TransportCubeDetails details) async {
-    final guidesList = details.guides.map((g) => g.packageCode).join('\n• ');
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enviar cubo a tránsito'),
-        content: Text(
-          'Se enviará el cubo a tránsito. El backend ya actualiza los estados de las guías automáticamente.\n\n'
-          'Guías incluidas:\n\n• $guidesList\n\n'
-          '¿Desea continuar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enviar a tránsito'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      AppLogger.log(
-        'Starting send-to-transit flow for cube ${widget.cubeId}',
-        source: 'CustomsDispatchDetailsScreen',
-      );
-      
-      final provider = context.read<TransportCubeProvider>();
-      
-      // Cambiar estado del cubo a Sent
-      provider.toggleCubeSelection(widget.cubeId);
-      final cubeResp = await provider.changeSelectedCubesState(VisualStates.sent);
-
-      if (!mounted) return;
-
-      if (cubeResp.isSuccessful) {
-        setState(() {});
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(cubeResp.messageDetail ?? cubeResp.message ?? '✅ Cubo enviado a tránsito'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(cubeResp.messageDetail ?? cubeResp.message ?? '❌ Error al cambiar estado del cubo'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error en el proceso: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 }

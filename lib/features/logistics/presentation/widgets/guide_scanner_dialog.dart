@@ -22,7 +22,6 @@ class GuideScannerDialog extends StatefulWidget {
 
 class _GuideScannerDialogState extends State<GuideScannerDialog> {
   final List<String> _scannedGuides = [];
-  String _currentGuide = '';
   final FocusNode _focusNode = FocusNode();
 
   @override
@@ -41,20 +40,22 @@ class _GuideScannerDialogState extends State<GuideScannerDialog> {
     if (guide.isEmpty) return;
 
     if (!widget.expectedGuides.contains(guide)) {
-      _showError('❌ Guía no pertenece a este cubo');
+      _showError('Guía no pertenece a este cubo');
       return;
     }
 
     if (_scannedGuides.contains(guide)) {
-      _showWarning('⚠️ Guía ya ${widget.currentState == VisualStates.sent ? 'verificada' : 'descargada'}');
+      _showWarning(
+          'Guía ya ${widget.currentState == VisualStates.sent ? 'verificada' : 'descargada'}');
       return;
     }
 
     setState(() {
       _scannedGuides.add(guide);
     });
-    
-    _showSuccess('✅ ${VisualStates.getGuideSuccessMessage(widget.currentState)}');
+
+    _showSuccess(
+        VisualStates.getGuideSuccessMessage(widget.currentState));
 
     if (_scannedGuides.length == widget.expectedGuides.length) {
       Navigator.pop(context);
@@ -94,10 +95,12 @@ class _GuideScannerDialogState extends State<GuideScannerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final actionLabel = widget.currentState == VisualStates.sent ? 'verificada' : 'descargada';
+    final actionLabel =
+    widget.currentState == VisualStates.sent ? 'verificada' : 'descargada';
 
     return AlertDialog(
-      title: Text('${VisualStates.getGuideDialogTitle(widget.currentState)} - Cubo #${widget.cubeId}'),
+      title: Text(
+          '${VisualStates.getGuideDialogTitle(widget.currentState)} - Cubo #${widget.cubeId}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +123,10 @@ class _GuideScannerDialogState extends State<GuideScannerDialog> {
               ),
             ),
             onChanged: (value) {
-              _currentGuide = value;
+              // Handle newlines in onChanged
+              if (value.endsWith('\n')) {
+                _handleGuideScanned(value.replaceAll('\n', ''));
+              }
             },
             onSubmitted: _handleGuideScanned,
           ),

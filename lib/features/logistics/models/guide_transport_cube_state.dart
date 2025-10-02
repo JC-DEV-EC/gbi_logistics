@@ -6,23 +6,23 @@ import 'package:flutter/material.dart';
 /// del cubo, indicando si ha sido ingresada o extraída.
 class GuideTransportCubeState {
   /// Estado cuando la guía ha sido ingresada al cubo
-  static const String ENTERED = 'Entered';
+  static const String entered = 'Entered';
 
   /// Estado cuando la guía ha sido extraída del cubo
-  static const String EXTRACTED = 'Extracted';
+  static const String extracted = 'Extracted';
 
   /// Lista de todos los estados posibles
   static const List<String> values = [
-    ENTERED,
-    EXTRACTED,
+    entered,
+    extracted,
   ];
 
   /// Obtiene la etiqueta amigable para mostrar al usuario
   static String getLabel(String state) {
     switch (state) {
-      case ENTERED:
+      case entered:
         return 'Ingresada';
-      case EXTRACTED:
+      case extracted:
         return 'Extraída';
       default:
         return 'Desconocido';
@@ -32,9 +32,9 @@ class GuideTransportCubeState {
   /// Color sugerido para UI
   static int getColor(String state) {
     switch (state) {
-      case ENTERED:
+      case entered:
         return 0xFF4CAF50;  // Verde
-      case EXTRACTED:
+      case extracted:
         return 0xFFF44336;  // Rojo
       default:
         return 0xFF9E9E9E;  // Gris
@@ -44,9 +44,9 @@ class GuideTransportCubeState {
   /// Ícono sugerido para UI
   static IconData getIcon(String state) {
     switch (state) {
-      case ENTERED:
+      case entered:
         return Icons.check_circle;
-      case EXTRACTED:
+      case extracted:
         return Icons.remove_circle;
       default:
         return Icons.help_outline;

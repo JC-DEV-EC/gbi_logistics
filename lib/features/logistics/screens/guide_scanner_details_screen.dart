@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 // Services
-import '../services/app_sounds.dart';
 import '../services/guide_details_service.dart';
 
 // Models
@@ -71,9 +70,7 @@ class _GuideScannerDetailsScreenState extends State<GuideScannerDetailsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              response.messageDetail ?? 
-                              response.message ?? 
-                              'Error al buscar la guía',
+                              response.messageDetail ?? '',
                               style: const TextStyle(fontSize: 13),
                             ),
                             backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
@@ -146,7 +143,7 @@ class _GuideScannerDetailsScreenState extends State<GuideScannerDetailsScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Colors.grey.withValues(alpha: 26),
                       spreadRadius: 1,
                       blurRadius: 6,
                     ),
@@ -253,7 +250,7 @@ class _DetailItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.1)),
+          bottom: BorderSide(color: theme.dividerColor.withValues(alpha: 26)),
         ),
       ),
       child: Row(

@@ -14,7 +14,6 @@ import '../models/transport_cube_state.dart';
 
 // Presentation
 import '../presentation/constants/visual_states.dart';
-import '../presentation/helpers/error_helper.dart';
 import '../presentation/widgets/app_drawer.dart';
 
 // Screens
@@ -60,7 +59,11 @@ class WarehouseTransitScreen extends StatelessWidget {
   }
 
   Future<void> _showSendToReceptionDialog(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final provider = context.read<TransportCubeProvider>();
+    final auth = context.read<AuthProvider>();
+    final transportProvider = context.read<TransportCubeProvider>();
+    final guideProvider = context.read<GuideProvider>();
     final cubeCount = provider.selectedCubeIds.length;
 
     developer.log(
@@ -99,7 +102,6 @@ class WarehouseTransitScreen extends StatelessWidget {
       );
 
       // Refrescar token preventivamente
-      final auth = context.read<AuthProvider>();
       final refreshed = await auth.ensureFreshToken();
       developer.log(
         'Token refresh before change state - Refreshed/Valid: $refreshed',
@@ -107,7 +109,6 @@ class WarehouseTransitScreen extends StatelessWidget {
       );
 
       // 1) Recolectar guías de los cubos seleccionados
-      final transportProvider = context.read<TransportCubeProvider>();
       final guideCodes = <String>{};
       for (final cubeId in transportProvider.selectedCubeIds) {
         final details = await transportProvider.fetchCubeDetailsRaw(
@@ -126,7 +127,7 @@ class WarehouseTransitScreen extends StatelessWidget {
 
       // 2) Actualizar estado de guías a TransitToWarehouse
       if (guideCodes.isNotEmpty) {
-        final guidesUpdate = await context.read<GuideProvider>().updateGuideStatus(
+        final guidesUpdate = await guideProvider.updateGuideStatus(
           UpdateGuideStatusRequest(
             guides: guideCodes.toList(),
             newStatus: TrackingStateType.transitToWarehouse,  // valor real: 'TransitToWarehouse'
@@ -135,7 +136,7 @@ class WarehouseTransitScreen extends StatelessWidget {
 
         if (!guidesUpdate.isSuccessful) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
                 guidesUpdate.messageDetail ??
@@ -149,7 +150,7 @@ class WarehouseTransitScreen extends StatelessWidget {
         }
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
                 guidesUpdate.messageDetail ??
@@ -165,7 +166,7 @@ class WarehouseTransitScreen extends StatelessWidget {
 
       // 3) Cambiar estado del cubo a Sent
       final response =
-      await transportProvider.changeSelectedCubesState(TransportCubeState.SENT);
+      await transportProvider.changeSelectedCubesState(TransportCubeState.sent);
 
       developer.log(
         'Cube state changed to Sent - Success: ${response.isSuccessful}',
@@ -179,19 +180,19 @@ class WarehouseTransitScreen extends StatelessWidget {
         await transportProvider.loadCubes(); // Recargar lista de cubos
 
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
               response.messageDetail ??
                   response.message ??
-                  '✅ $cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
+                  '$cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
               response.messageDetail ??
@@ -204,7 +205,12 @@ class WarehouseTransitScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ErrorHelper.showErrorSnackBar(context, e);
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }

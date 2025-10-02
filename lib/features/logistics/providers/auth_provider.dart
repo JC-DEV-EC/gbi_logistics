@@ -76,7 +76,7 @@ class AuthProvider extends ChangeNotifier {
         AppLogger.log('Login successful - Token received', source: 'AuthProvider', type: 'SUCCESS');
         return true;
       } else {
-        _error = response.message;
+        _error = response.messageDetail;
         AppLogger.error('Login failed', error: _error, source: 'AuthProvider');
         notifyListeners();
         return false;

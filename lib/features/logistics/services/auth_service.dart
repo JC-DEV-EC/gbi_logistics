@@ -54,7 +54,7 @@ class AuthService {
         await _storage.setLoginData(loginData.toJson());
       } else if (!response.isSuccessful) {
         return ApiResponse.error(
-          message: response.messageDetail ?? response.message,
+          messageDetail: response.messageDetail ?? '',
           content: LoginResponse.empty(),
         );
       }
@@ -62,7 +62,7 @@ class AuthService {
       return response;
     } catch (e) {
       return ApiResponse.error(
-        message: 'Error al iniciar sesión',
+        messageDetail: null,  // Let backend provide error message
         content: LoginResponse.empty(),
       );
     }

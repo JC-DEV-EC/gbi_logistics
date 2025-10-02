@@ -35,7 +35,7 @@ class GuideService {
     bool suppressAuthHandling = true,
   }) async {
     if (request.guides.isEmpty) {
-      return ApiResponse.error(message: 'No hay guías para actualizar');
+      return ApiResponse.error(messageDetail: null);  // Let backend provide error message
     }
 
     AppLogger.log(
@@ -46,14 +46,13 @@ class GuideService {
     final response = await _http.post<void>(
       ApiEndpoints.updateGuideStatus,
       request.toJson(),
-      (_) => null,
+      (_) {},
       suppressAuthHandling: true,
     );
 
     AppLogger.log(
       'Resultado de actualización:\n'
-      '- Exitoso: ${response.isSuccessful}\n'
-      '- Mensaje: ${response.messageDetail ?? response.message}',
+      '- Exitoso: ${response.isSuccessful}',
       source: 'GuideService'
     );
 
@@ -83,12 +82,12 @@ class GuideService {
           source: 'GuideService'
         );
         // No necesitamos parsear el content, solo usar el code/message/messageDetail
-        return null;
+        return;
       },
     );
 
     AppLogger.log(
-      'Respuesta despacho:\nExitoso: ${response.isSuccessful}\nMensaje: ${response.messageDetail ?? response.message}',
+      'Respuesta despacho:\nExitoso: ${response.isSuccessful}',
       source: 'GuideService'
     );
 

@@ -36,19 +36,20 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
 
   /// Procesa en lote las guías seleccionadas
   Future<void> _processBatchGuides(GuideProvider provider) async {
+    // Capture messenger before awaits to avoid context across async gaps
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (!mounted) return;
     final selectedGuides = provider.selectedGuides.toList();
 
     // Verificar que hay un subcourier seleccionado SOLO al procesar
     if (provider.selectedSubcourierId == null) {
-      if (mounted) {
-          await AppSounds.error();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Debe seleccionar un mensajero antes de procesar'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      await AppSounds.error();
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('Por favor seleccione un subcourier'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -68,16 +69,15 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
       // Construir mensaje de alerta
       final sample = mismatches.take(3).map((g) => g.code).join(', ');
       final extra = mismatches.length > 3 ? ' y ${mismatches.length - 3} más' : '';
-      if (mounted) {
-          await AppSounds.error();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Las siguientes guías no pertenecen a ${selectedSub.name}: $sample$extra'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+      if (!mounted) return;
+      await AppSounds.error();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Las guías $sample$extra pertenecen a otro subcourier'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
       return;
     }
 
@@ -100,11 +100,10 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         if (!mounted) return;
 
         // Limpiar cualquier SnackBar existente y mostrar el nuevo
-        final scaffoldMessenger = ScaffoldMessenger.of(context);
         scaffoldMessenger.hideCurrentSnackBar();
         
           // Mostrar mensaje del backend
-                        final serverMessage = response.messageDetail ?? response.message ?? '';
+                        final serverMessage = response.messageDetail ?? '';
                         final baseMessage = 'Guías actualizadas a estado "Listo para Entrega"';
 
                         scaffoldMessenger.showSnackBar(
@@ -137,8 +136,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         // Feedback de error
         HapticFeedback.heavyImpact();
           await AppSounds.error();
-        final errorMessage = response.messageDetail ?? response.message ?? 'Error al despachar guías';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        final errorMessage = response.messageDetail ?? '';
+        scaffoldMessenger.showSnackBar(SnackBar(
           content: Text(errorMessage),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 10),
@@ -147,8 +146,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
     } catch (e) {
       if (!mounted) return;
           await AppSounds.error();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error inesperado: $e'),
+      scaffoldMessenger.showSnackBar(const SnackBar(
+        content: Text('Error procesando las guías'),
         backgroundColor: Colors.red,
       ));
     }
@@ -156,6 +155,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
 
   /// Maneja la entrada de guías individuales
   Future<void> _handleGuideInput(String? guide, GuideProvider provider) async {
+    // Capture messenger before awaits to avoid context across async gaps
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
     if (guide == null || guide.isEmpty) return;
 
     final cleanGuide = guide.trim();
@@ -178,9 +179,8 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
           }
-          if (mounted) {
-            _controller.clear();
-          }
+          if (!mounted) return;
+          _controller.clear();
           return;
         }
 
@@ -207,39 +207,36 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
           provider.setGuides(newGuides);
         } else {
           HapticFeedback.heavyImpact();
-          if (mounted) {
-await AppSounds.error();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  response.messageDetail ?? response.message ?? 'La guía no está disponible para despacho',
-                  style: const TextStyle(fontSize: 13, color: Colors.white),
-                ),
-                backgroundColor: Colors.red,
+          if (!mounted) return;
+          await AppSounds.error();
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                response.messageDetail ?? '',
+                style: const TextStyle(fontSize: 13, color: Colors.white),
               ),
-            );
-          }
-        }
-
-        if (mounted) {
-          _controller.clear();
-          // Mantener el foco
-          Future.microtask(() {
-            if (!_focusNode.hasFocus) {
-              _focusNode.requestFocus();
-            }
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-await AppSounds.error();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Error al procesar la guía'),
               backgroundColor: Colors.red,
             ),
           );
         }
+
+        if (!mounted) return;
+        _controller.clear();
+        // Mantener el foco
+        Future.microtask(() {
+          if (!_focusNode.hasFocus) {
+            _focusNode.requestFocus();
+          }
+        });
+      } catch (e) {
+        if (!mounted) return;
+        await AppSounds.error();
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Error al procesar la guía'),
+            backgroundColor: Colors.red,
+          ),
+        );
       } finally {
         if (mounted) {
           _controller.clear();
@@ -280,7 +277,7 @@ await AppSounds.error();
         Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: theme.colorScheme.primary.withOpacity(0.5),
+              color: theme.colorScheme.primary.withValues(alpha: 128),
             ),
             borderRadius: BorderRadius.circular(8),
           ),

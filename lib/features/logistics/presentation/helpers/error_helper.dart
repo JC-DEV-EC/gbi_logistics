@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 class ErrorHelper {
   /// Muestra un diálogo de error
   static Future<void> showError(BuildContext context, dynamic error) async {
-    String message = 'Error desconocido';
+    String message = '';
     String detail = '';
 
     if (error is Map<String, dynamic>) {
-      message = error['message'] ?? message;
       detail = error['messageDetail'] ?? '';
+      message = detail.isEmpty ? (error['message'] ?? '') : '';
     } else {
       message = error.toString();
     }
@@ -44,10 +44,13 @@ class ErrorHelper {
 
   /// Muestra un error en un SnackBar
   static void showErrorSnackBar(BuildContext context, dynamic error) {
-    String message = 'Error desconocido';
+    String message = '';
 
     if (error is Map<String, dynamic>) {
-      message = error['message'] ?? message;
+      message = error['messageDetail'] ?? '';
+      if (message.isEmpty) {
+        message = error['message'] ?? '';
+      }
     } else {
       message = error.toString();
     }

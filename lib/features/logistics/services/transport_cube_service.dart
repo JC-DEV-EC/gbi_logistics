@@ -113,7 +113,7 @@ class TransportCubeService {
     final response = await _http.put<void>(
       '${ApiEndpoints.changeTransportCubeState}?version=${ApiConfig.version}',
       request.toJson(),
-      (_) => null,
+      (_) {},
       suppressAuthHandling: true,  // Evitar manejo automático de auth
     );
 
@@ -163,7 +163,7 @@ class TransportCubeService {
     return _http.post<void>(
 '${ApiEndpoints.getTransportCubes}/verify-scan',
       request.toJson(),
-      (_) => null,
+      (_) {},
     );
   }
 }

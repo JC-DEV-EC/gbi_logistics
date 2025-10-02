@@ -81,32 +81,6 @@ class GuideProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveStates() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      final validatedGuides = _guideUiStates.entries
-          .where((e) => e.value == 'validated')
-          .map((e) => e.key)
-          .toList();
-
-      final dispatchedGuides = _guideUiStates.entries
-          .where((e) => e.value == 'dispatched')
-          .map((e) => e.key)
-          .toList();
-
-      await prefs.setStringList(_validatedGuidesKey, validatedGuides);
-      await prefs.setStringList(_dispatchedGuidesKey, dispatchedGuides);
-
-      AppLogger.log(
-        'Estados guardados: ${validatedGuides.length} validadas, ${dispatchedGuides.length} despachadas',
-        source: 'GuideProvider'
-      );
-    } catch (e) {
-      AppLogger.error('Error guardando estados', error: e, source: 'GuideProvider');
-    }
-  }
-
   // Métodos de búsqueda y carga
   Future<void> loadGuides({
     required int page,
@@ -222,8 +196,7 @@ class GuideProvider extends ChangeNotifier {
 
         if (!resp.isSuccessful || resp.content == null) {
           return ApiResponse.error(
-            message: resp.message,
-            messageDetail: resp.messageDetail
+            messageDetail: resp.messageDetail ?? ''
           );
         }
 
@@ -259,15 +232,13 @@ class GuideProvider extends ChangeNotifier {
         source: 'GuideProvider'
       );
       return ApiResponse.error(
-        message: 'La guía no se encuentra en el estado esperado',
-        messageDetail: 'La guía $code no se encuentra en estado $status'
+        messageDetail: null // Backend should provide error message
       );
 
     } catch (e) {
       AppLogger.error('Error buscando guía', error: e, source: 'GuideProvider');
       return ApiResponse.error(
-        message: e.toString(),
-        messageDetail: 'Error al buscar la guía'
+        messageDetail: null // Backend should provide error message
       );
     }
   }
@@ -409,13 +380,13 @@ class GuideProvider extends ChangeNotifier {
       final response = await _guideService.updateGuideStatus(request);
       
       if (!response.isSuccessful) {
-        _error = response.message;
+        _error = response.messageDetail;
       }
 
       return response;
     } catch (e) {
       _error = e.toString();
-      return ApiResponse.error(message: e.toString());
+      return ApiResponse.error(messageDetail: null); // Backend should provide error message
     } finally {
       _isLoading = false;
       notifyListeners();

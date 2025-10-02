@@ -1,109 +1,82 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/guide_provider.dart';
 import '../helpers/error_helper.dart';
 import '../helpers/date_helper.dart';
 import 'loading_indicator.dart';
 import '../../models/operation_models.dart';
 
-/// Widget especializado para mostrar lista de guías en recepción de bodega
+/// Pantalla para mostrar lista de guías en recepción de bodega
 class WarehouseReceptionListScreen extends StatefulWidget {
   final String title;
   final String status;
   final bool showHistoric;
-  final bool hideValidated; // oculta validadas/ despachadas (uso en recepción)
+  final bool hideValidated; // oculta validadas/despachadas (uso en recepción)
 
   const WarehouseReceptionListScreen({
-    Key? key,
+    super.key,
     required this.title,
     required this.status,
     this.showHistoric = false,
     this.hideValidated = false,
-  }) : super(key: key);
+  });
 
   @override
-  State<WarehouseReceptionListScreen> createState() => _WarehouseReceptionListScreenState();
+  State<WarehouseReceptionListScreen> createState() =>
+      _WarehouseReceptionListScreenState();
 }
 
-class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScreen> {
+class _WarehouseReceptionListScreenState
+    extends State<WarehouseReceptionListScreen> {
   @override
   void initState() {
     super.initState();
-    // Cargar automáticamente según estado y modo
+
+    // Cargar automáticamente si el estado es TransitToWarehouse (Recepción en Bodega)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Siempre cargar para TransitToWarehouse (Recepción en Bodega)
-      // Al estar en tránsito, las guías deberían estar en estado DispatchedFromCustoms
       if (widget.status == TrackingStateType.transitToWarehouse) {
         _loadGuides();
       }
     });
   }
 
+  /// Llamada al provider para cargar las guías
   Future<void> _loadGuides() async {
-      await context.read<GuideProvider>().loadGuides(
-        page: 1,
-        pageSize: 50,
-        status: TrackingStateType.transitToWarehouse,
-        hideValidated: widget.hideValidated,
-      );
+    await context.read<GuideProvider>().loadGuides(
+      page: 1,
+      pageSize: 50,
+      status: TrackingStateType.transitToWarehouse,
+      hideValidated: widget.hideValidated,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<GuideProvider>();
-    final theme = Theme.of(context);
 
     return RefreshIndicator(
       onRefresh: _loadGuides,
       child: provider.isLoading
-          ? const LoadingIndicator(
-              message: 'Cargando guías...',
-            )
+          ? const LoadingIndicator(message: 'Cargando guías...')
           : provider.error != null
-              ? ErrorHelper.buildErrorWidget(
-                  error: provider.error!,
-                  onRetry: _loadGuides,
-                )
-              : _buildGuideList(context),
+          ? ErrorHelper.buildErrorWidget(
+        error: provider.error!,
+        onRetry: _loadGuides,
+      )
+          : SizedBox.expand(
+        child: _buildGuideList(context),
+      ),
     );
   }
 
+  /// Construye la lista de guías
   Widget _buildGuideList(BuildContext context) {
     final provider = context.watch<GuideProvider>();
     final theme = Theme.of(context);
 
     if (provider.guides.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 64,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.status == 'TransitToWarehouse'
-                ? 'No hay guías en tránsito a bodega'
-                : 'No hay guías en este estado',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              widget.status == 'TransitToWarehouse'
-                ? 'Las guías aparecerán aquí cuando sean despachadas desde aduana'
-                : 'Escanea o busca una guía para continuar',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
+      return _buildEmptyState(theme);
     }
 
     // Ordenar guías: primero las escaneadas/seleccionadas
@@ -122,131 +95,173 @@ class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScr
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final guide = guides[index];
-        final uiState = provider.getGuideUiState(guide.code ?? '');
-        final code = guide.code ?? '';
-        final isSelected = code.isNotEmpty && provider.isGuideSelected(code);
-
-        return Card(
-          clipBehavior: Clip.hardEdge,
-          child: InkWell(
-            onTap: () {
-              // Aquí iría la navegación a detalles de guía si es necesario
-            },
-            onLongPress: () {
-              if (code.isNotEmpty) provider.toggleGuideSelection(code);
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: uiState == 'scanned' 
-                    ? theme.colorScheme.primary
-                    : isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withOpacity(0.2),
-                  width: uiState == 'scanned' || isSelected ? 2 : 1,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Guía ${guide.code ?? '—'}',
-                          style: theme.textTheme.titleLarge,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline),
-                        onPressed: () => _showGuideDetails(context, guide),
-                        tooltip: 'Ver detalles',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (guide.subcourierName != null) ...[                        
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.local_shipping_outlined,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                guide.subcourierName!,
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              DateHelper.formatDateTime(guide.updateDateTime),
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Paquetes: ${guide.packages}',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          Chip(
-                            label: Text(guide.stateLabel ?? 'Desconocido'),
-                            backgroundColor: theme.colorScheme.surfaceVariant,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+        return _buildGuideCard(context, guide);
       },
     );
   }
 
-  void _showGuideDetails(BuildContext context, dynamic guide) {
+  /// Estado vacío cuando no hay guías
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined,
+              size: 64, color: theme.colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            widget.status == 'TransitToWarehouse'
+                ? 'No hay guías en tránsito a bodega'
+                : 'No hay guías en este estado',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.status == 'TransitToWarehouse'
+                ? 'Las guías aparecerán aquí cuando sean despachadas desde aduana'
+                : 'Escanea o busca una guía para continuar',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Card para cada guía
+  Widget _buildGuideCard(BuildContext context, dynamic guide) {
+    final provider = context.watch<GuideProvider>();
     final theme = Theme.of(context);
 
+    final uiState = provider.getGuideUiState(guide.code ?? '');
+    final code = guide.code ?? '';
+    final isSelected = code.isNotEmpty && provider.isGuideSelected(code);
+
+    return Card(
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () {
+          // Aquí iría la navegación a detalles de guía si es necesario
+        },
+        onLongPress: () {
+          if (code.isNotEmpty) provider.toggleGuideSelection(code);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: uiState == 'scanned'
+                  ? theme.colorScheme.primary
+                  : isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline.withValues(alpha: 51),
+              width: uiState == 'scanned' || isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCardHeader(context, guide),
+              const SizedBox(height: 16),
+              _buildCardBody(theme, guide),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Encabezado de la tarjeta
+  Widget _buildCardHeader(BuildContext context, dynamic guide) {
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Guía ${guide.code ?? '—'}',
+            style: theme.textTheme.titleLarge,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.info_outline),
+          onPressed: () => _showGuideDetails(context, guide),
+          tooltip: 'Ver detalles',
+        ),
+      ],
+    );
+  }
+
+  /// Cuerpo de la tarjeta
+  Widget _buildCardBody(ThemeData theme, dynamic guide) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (guide.subcourierName != null) ...[
+          Row(
+            children: [
+              Icon(Icons.local_shipping_outlined,
+                  size: 20, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  guide.subcourierName!,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        Row(
+          children: [
+            Icon(Icons.calendar_today_outlined,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                DateHelper.formatDateTime(guide.updateDateTime),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.inventory_2_outlined,
+                size: 20, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Paquetes: ${guide.packages}',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Chip(
+              label: Text(guide.stateLabel ?? 'Desconocido'),
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Diálogo con detalles de la guía
+  void _showGuideDetails(BuildContext context, dynamic guide) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -269,7 +284,7 @@ class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScr
                 DateHelper.formatDateTime(guide.updateDateTime),
                 Icons.calendar_today_outlined,
               ),
-              if (guide.subcourierName != null) ...[              
+              if (guide.subcourierName != null) ...[
                 const SizedBox(height: 12),
                 _buildDetailRow(
                   context,
@@ -298,8 +313,11 @@ class _WarehouseReceptionListScreenState extends State<WarehouseReceptionListScr
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, String label, String value, IconData icon) {
+  /// Fila reutilizable para los detalles
+  Widget _buildDetailRow(
+      BuildContext context, String label, String value, IconData icon) {
     final theme = Theme.of(context);
+
     return Row(
       children: [
         Icon(icon, size: 20, color: theme.colorScheme.primary),

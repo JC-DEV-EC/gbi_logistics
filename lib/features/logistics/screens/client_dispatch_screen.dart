@@ -49,15 +49,15 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
       child: Autocomplete<int>(
         key: ValueKey(guideProvider.selectedSubcourierId),
         fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-          void _showAllOptions() {
+          void showAllOptions() {
             if (!focusNode.hasFocus) {
               focusNode.requestFocus();
             }
             // Forzar un cambio para que Autocomplete abra el overlay
             final original = textEditingController.text;
             textEditingController.value = textEditingController.value.copyWith(
-              text: original + ' ',
-              selection: TextSelection.collapsed(offset: (original + ' ').length),
+              text: '$original ',
+              selection: TextSelection.collapsed(offset: original.length + 1),
             );
             Future.microtask(() {
               textEditingController.value = textEditingController.value.copyWith(
@@ -89,7 +89,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_drop_down),
                     tooltip: 'Ver todos',
-                    onPressed: _showAllOptions,
+                    onPressed: showAllOptions,
                   ),
                 ],
               ),

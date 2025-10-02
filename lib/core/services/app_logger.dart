@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 
 class AppLogger {
   static void log(String message, {
@@ -13,8 +14,8 @@ ${error != null ? '\nError: $error' : ''}
 ${stackTrace != null ? '\nStack: \n$stackTrace' : ''}
 ----------------------------------------''';
 
-    // Siempre usar print en lugar de developer.log para ver en la consola
-    print(logMessage);
+    // In production, this should use a proper logging system
+    debugPrint(logMessage);
   }
 
   static void button(String buttonName, {String? screen}) {

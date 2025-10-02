@@ -34,8 +34,6 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
       }
       _guideController.clear();
     });
-    if (guide == null || guide.isEmpty) return;
-
   }
 
   void _removeGuide(String guide) {
@@ -48,7 +46,7 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
     if (_guides.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Agregue al menos una guía'),
+          content: Text(''),  // Let backend provide the message
           backgroundColor: Colors.orange,
         ),
       );
@@ -67,18 +65,18 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
       if (apiResp.isSuccessful) {
         final provider = context.read<TransportCubeProvider>();
         // Asegurar que estamos en el estado correcto después de crear el cubo
-        await provider.changeState(TransportCubeState.CREATED);
+        await provider.changeState(TransportCubeState.created);
         
         if (!mounted) return;
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(apiResp.messageDetail ?? apiResp.message ?? '✅ Cubo creado exitosamente'),
+            content: Text(apiResp.messageDetail ?? ''),
             backgroundColor: Colors.green,
           ),
         );
       } else {
-        ErrorHelper.showErrorSnackBar(context, apiResp.messageDetail ?? apiResp.message ?? 'Error al crear cubo');
+        ErrorHelper.showErrorSnackBar(context, apiResp.messageDetail ?? '');
       }
     } catch (e) {
       ErrorHelper.showErrorSnackBar(context, e);

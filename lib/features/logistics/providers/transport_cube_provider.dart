@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as developer;
-import 'dart:math' show max;
 import '../../../core/services/app_logger.dart';
 import '../../../core/models/api_response.dart';
 import '../services/transport_cube_service.dart';
@@ -15,14 +14,12 @@ class TransportCubeProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _lastMessageDetail;
-  String _selectedState = TransportCubeState.CREATED; // Estado inicial cuando el cubo se crea en aduana
+  String _selectedState = TransportCubeState.created;
   final Map<int, bool> _loadingDetails = {}; // Rastrear peticiones de detalles por cubeId
   List<op.TransportCubeInfoAPI> _cubes = [];
   TransportCubeDetails? _selectedCubeDetails;
   final Set<int> _selectedCubes = {};
   final TransportCubeService _service;
-  // Cache de futures de detalles por cubo para evitar llamadas duplicadas
-  final Map<int, Future<TransportCubeDetails>> _detailsFutures = {};
 
   // Exponer service para uso interno
   TransportCubeService get service => _service;
@@ -35,26 +32,26 @@ class TransportCubeProvider extends ChangeNotifier {
   String? get error => _errorMessage;
   String? get lastMessageDetail => _lastMessageDetail;
   String get selectedState => _selectedState;
-List<op.TransportCubeInfoAPI> get cubes {
+  List<op.TransportCubeInfoAPI> get cubes {
     developer.log(
-      'Pre-filter cubes state:\n'
-      '- Total cubes: ${_cubes.length}\n'
-      '- First cube state: ${_cubes.firstOrNull?.state}\n'
-      '- Selected state: $_selectedState',
-      name: 'TransportCubeProvider'
+        'Pre-filter cubes state:\n'
+            '- Total cubes: ${_cubes.length}\n'
+            '- First cube state: ${_cubes.firstOrNull?.state}\n'
+            '- Selected state: $_selectedState',
+        name: 'TransportCubeProvider'
     );
 
     final filteredCubes = _cubes.where(
-      (cube) => cube.state == _selectedState
+            (cube) => cube.state == _selectedState
     ).toList();
 
     developer.log(
-      'Getting cubes:\n'
-      '- Total cubes: ${_cubes.length}\n'
-      '- Selected state: $_selectedState\n'
-      '- Filtered cubes: ${filteredCubes.length}\n'
-      '- Error message: $_errorMessage',
-      name: 'TransportCubeProvider'
+        'Getting cubes:\n'
+            '- Total cubes: ${_cubes.length}\n'
+            '- Selected state: $_selectedState\n'
+            '- Filtered cubes: ${filteredCubes.length}\n'
+            '- Error message: $_errorMessage',
+        name: 'TransportCubeProvider'
     );
 
     return List.unmodifiable(filteredCubes);
@@ -67,7 +64,7 @@ List<op.TransportCubeInfoAPI> get cubes {
   Future<TransportCubeDetails> fetchCubeDetailsRaw(int cubeId, {bool suppressAuthHandling = true}) async {
     final resp = await _service.getTransportCubeDetails(cubeId, suppressAuthHandling: suppressAuthHandling);
     if (!resp.isSuccessful || resp.content == null) {
-      throw Exception(resp.message ?? 'No se pudo obtener detalles del cubo');
+      throw Exception(resp.messageDetail ?? resp.message ?? '');
     }
     return resp.content!;
   }
@@ -90,8 +87,8 @@ List<op.TransportCubeInfoAPI> get cubes {
 
     // Si ya tenemos los detalles del mismo cubo y todo está correcto, evitar recarga
     final currentDetails = _selectedCubeDetails;
-    if (currentDetails != null && 
-        currentDetails.transportCube.id == cubeId && 
+    if (currentDetails != null &&
+        currentDetails.transportCube.id == cubeId &&
         _errorMessage == null) {
       developer.log(
         'Skipping loadCubeDetails - Already have details for cube $cubeId',
@@ -115,12 +112,12 @@ List<op.TransportCubeInfoAPI> get cubes {
 
       developer.log('Loading details for cube $cubeId', name: 'TransportCubeProvider');
       final response = await _service.getTransportCubeDetails(cubeId, suppressAuthHandling: true);
-      
+
       if (response.isSuccessful && response.content != null) {
         final TransportCubeDetails newDetails = response.content!;
         final hasChanged = _selectedCubeDetails?.transportCube.id != newDetails.transportCube.id ||
-                         _selectedCubeDetails?.guides.length != newDetails.guides.length ||
-                         _selectedCubeDetails?.transportCube.state != newDetails.transportCube.state;
+            _selectedCubeDetails?.guides.length != newDetails.guides.length ||
+            _selectedCubeDetails?.transportCube.state != newDetails.transportCube.state;
 
         _selectedCubeDetails = newDetails;
         _errorMessage = null;
@@ -153,7 +150,7 @@ List<op.TransportCubeInfoAPI> get cubes {
 
   // Crea un nuevo cubo
   Future<ApiResponse<NewTransportCubeResponseGenericResponse>> createTransportCube(List<String> guides) async {
-    if (_isLoading) return ApiResponse.error(message: 'Operación en curso');
+    if (_isLoading) return ApiResponse.error(message: '');
 
     try {
       _isLoading = true;
@@ -164,8 +161,8 @@ List<op.TransportCubeInfoAPI> get cubes {
       final Set<int> previousIds = _cubes.map((c) => c.id).toSet();
 
       AppLogger.log(
-        'Creando cubo con ${guides.length} guías',
-        source: 'TransportCubeProvider'
+          'Creando cubo con ${guides.length} guías',
+          source: 'TransportCubeProvider'
       );
 
       final request = op.NewTransportCubeRequest(
@@ -177,12 +174,12 @@ List<op.TransportCubeInfoAPI> get cubes {
         // Obtener el ID del cubo creado
         final newCubeId = response.content?.content?.id;
         AppLogger.log(
-          'Cubo creado exitosamente con ID: $newCubeId',
-          source: 'TransportCubeProvider'
+            'Cubo creado exitosamente con ID: $newCubeId',
+            source: 'TransportCubeProvider'
         );
         AppLogger.log(
-          'Cubo creado exitosamente, iniciando polling para detectar el nuevo cubo',
-          source: 'TransportCubeProvider'
+            'Cubo creado exitosamente, iniciando polling para detectar el nuevo cubo',
+            source: 'TransportCubeProvider'
         );
 
         // Hasta 3 intentos con pequeña espera para detectar el nuevo cubo
@@ -197,8 +194,8 @@ List<op.TransportCubeInfoAPI> get cubes {
           final Set<int> diff = currentIds.difference(previousIds);
 
           AppLogger.log(
-            'Post-create polling attempt \'${i + 1}\' - New IDs detected: ${diff.join(", ")}',
-            source: 'TransportCubeProvider'
+              'Post-create polling attempt \'${i + 1}\' - New IDs detected: ${diff.join(", ")}',
+              source: 'TransportCubeProvider'
           );
 
           if (diff.isNotEmpty) {
@@ -212,23 +209,23 @@ List<op.TransportCubeInfoAPI> get cubes {
 
         if (!found) {
           AppLogger.log(
-            'Polling terminado: no se detectó un nuevo cubo en la lista. Puede ser retardo del backend o validación de negocio.',
-            source: 'TransportCubeProvider'
+              'Polling terminado: no se detectó un nuevo cubo en la lista. Puede ser retardo del backend o validación de negocio.',
+              source: 'TransportCubeProvider'
           );
           // Mensaje para el usuario cuando no se detecta el cubo nuevo
-          _lastMessageDetail = '⚠️ El backend confirmó la creación pero el cubo aún no aparece en la lista. '
-            'Esto puede deberse a que la guía no cumple con los requisitos necesarios o a un retardo del sistema. '
-            'Intente refrescar la lista en unos segundos.';
+          _lastMessageDetail = 'El backend confirmó la creación pero el cubo aún no aparece en la lista. '
+              'Esto puede deberse a que la guía no cumple con los requisitos necesarios o a un retardo del sistema. '
+              'Intente refrescar la lista en unos segundos.';
         }
 
         _errorMessage = null;
         return response;
       }
 
-      _errorMessage = response.messageDetail ?? 'No se pudo crear el cubo';
+      _errorMessage = response.messageDetail ?? response.message ?? '';
       return response;
     } catch (e) {
-      _errorMessage = 'No se pudo crear el cubo';
+      _errorMessage = '';
       return ApiResponse.error(message: _errorMessage);
     } finally {
       _isLoading = false;
@@ -238,9 +235,9 @@ List<op.TransportCubeInfoAPI> get cubes {
 
   // Cambia el estado de un cubo
   Future<bool> changeTransportCubeState(
-    int cubeId,
-    String newState,
-  ) async {
+      int cubeId,
+      String newState,
+      ) async {
     if (_isLoading) return false;
 
     try {
@@ -248,7 +245,7 @@ List<op.TransportCubeInfoAPI> get cubes {
       _errorMessage = null;
       notifyListeners();
 
-final request = op.ChangeTranportCubesStateRequest(
+      final request = op.ChangeTranportCubesStateRequest(
         transportCubeIds: [cubeId],
         newState: newState,
       );
@@ -260,11 +257,10 @@ final request = op.ChangeTranportCubesStateRequest(
         _lastMessageDetail = response.messageDetail ?? response.message;
         return true;
       }
-      // Verificar si es error de sesión
-      _errorMessage = response.message ?? 'No se pudo actualizar el estado';
+      _errorMessage = response.messageDetail ?? response.message ?? '';
       return false;
     } catch (e) {
-      _errorMessage = 'No se pudo actualizar el estado';
+      _errorMessage = '';
       return false;
     } finally {
       _isLoading = false;
@@ -283,7 +279,7 @@ final request = op.ChangeTranportCubesStateRequest(
         'Cannot process - Loading: $_isLoading, Selected cubes empty: ${_selectedCubes.isEmpty}',
         name: 'TransportCubeProvider',
       );
-      return ApiResponse.error(message: 'No hay cubos seleccionados para actualizar');
+      return ApiResponse.error(message: '');
     }
 
     try {
@@ -296,30 +292,30 @@ final request = op.ChangeTranportCubesStateRequest(
         transportCubeIds: _selectedCubes.toList(),
         newState: newState,
       );
-      
+
       final response = await _service.changeTransportCubesState(request);
-      
+
       // Considerar código 60 como éxito también
       if (response.isSuccessful || (response.message?.contains('(60)') ?? false)) {
         _lastMessageDetail = response.messageDetail ?? response.message;
         _selectedCubes.clear();
         _errorMessage = null;
-        
+
         // Solo recargar la lista actual para ver los cubos desaparecer
         await loadCubes(force: true);
-        
+
         developer.log(
           'Successfully changed cube states to $newState - Message: ${response.messageDetail ?? response.message}',
           name: 'TransportCubeProvider',
         );
         return response;
       } else {
-        _errorMessage = response.messageDetail ?? response.message ?? 'No se pudo actualizar el estado';
+        _errorMessage = response.messageDetail ?? response.message ?? '';
         developer.log('Failed to change cube states: ${response.message}', name: 'TransportCubeProvider');
         return response;
       }
     } catch (e) {
-      _errorMessage = 'Error al procesar envío a tránsito';
+      _errorMessage = '';
       developer.log('Error in changeSelectedCubesState: $e', name: 'TransportCubeProvider');
       return ApiResponse.error(message: _errorMessage);
     } finally {
@@ -344,7 +340,7 @@ final request = op.ChangeTranportCubesStateRequest(
   // Maneja la selección de cubos
   void toggleCubeSelection(int cubeId) {
     developer.log('Attempting to toggle cube selection - ID: $cubeId', name: 'TransportCubeProvider');
-    
+
     // Validar que el cubo existe en la lista actual
     if (!_cubes.any((cube) => cube.id == cubeId)) {
       developer.log(
@@ -370,12 +366,12 @@ final request = op.ChangeTranportCubesStateRequest(
       );
       _selectedCubes.add(cubeId);
     }
-    
+
     developer.log(
       'Total cubos seleccionados: ${_selectedCubes.length}\nIDs: ${_selectedCubes.join(", ")}',
       name: 'TransportCubeProvider',
     );
-    
+
     notifyListeners();
   }
 
@@ -406,18 +402,18 @@ final request = op.ChangeTranportCubesStateRequest(
   // Load cubes
   Future<void> loadCubes({bool force = false}) async {
     AppLogger.log(
-      'Loading transport cubes - State: $_selectedState',
-      source: 'TransportCubeProvider'
+        'Loading transport cubes - State: $_selectedState',
+        source: 'TransportCubeProvider'
     );
-    
+
     if (_isLoading && !force) {
       AppLogger.log(
-        'Skip loading - Operation already in progress',
-        source: 'TransportCubeProvider'
+          'Skip loading - Operation already in progress',
+          source: 'TransportCubeProvider'
       );
       return;
     }
-    
+
     try {
       // Si estamos forzando, no marcar _isLoading para no bloquear cargas paralelas controladas
       if (!force) {
@@ -431,10 +427,10 @@ final request = op.ChangeTranportCubesStateRequest(
       // Los parámetros deben ser valores numéricos válidos y estar en PascalCase
       const page = 1;
       const itemsPerPage = 100; // Aumentar para reducir truncamiento al detectar nuevos cubos
-      
+
       AppLogger.log(
-        'Loading transport cubes with params:\n- Page: $page\n- ItemsPerPage: $itemsPerPage\n- State: $_selectedState',
-        source: 'TransportCubeProvider'
+          'Loading transport cubes with params:\n- Page: $page\n- ItemsPerPage: $itemsPerPage\n- State: $_selectedState',
+          source: 'TransportCubeProvider'
       );
 
       final response = await _service.getTransportCubes(
@@ -451,21 +447,21 @@ final request = op.ChangeTranportCubesStateRequest(
       if (response.isSuccessful && response.content != null) {
         _cubes = response.content!.registers;
         developer.log(
-          'Load success:\n'
-          '- Cubes loaded: ${_cubes.length}\n'
-          '- Current state: $_selectedState\n'
-          '- Response message: ${response.messageDetail ?? response.message}',
-          name: 'TransportCubeProvider'
+            'Load success:\n'
+                '- Cubes loaded: ${_cubes.length}\n'
+                '- Current state: $_selectedState\n'
+                '- Response message: ${response.messageDetail ?? response.message}',
+            name: 'TransportCubeProvider'
         );
         // Limpiar error explícitamente si tenemos datos
         _errorMessage = null;
         _lastMessageDetail = null;
       } else {
-        _errorMessage = response.messageDetail ?? response.message ?? 'Error al cargar cubos';
+        _errorMessage = response.messageDetail ?? response.message ?? '';
         developer.log('Failed to load cubes - Error: $_errorMessage', name: 'TransportCubeProvider');
       }
     } catch (e, stackTrace) {
-      _errorMessage = 'Error al cargar cubos';
+      _errorMessage = '';
       developer.log(
         'Error loading cubes',
         name: 'TransportCubeProvider',
@@ -492,9 +488,9 @@ final request = op.ChangeTranportCubesStateRequest(
 
   // Verify and change transport cube state
   Future<bool> verifyAndChangeTransportCubeState(
-    int cubeId,
-    String newState,
-  ) async {
+      int cubeId,
+      String newState,
+      ) async {
     return await changeTransportCubeState(cubeId, newState);
   }
 
@@ -508,7 +504,7 @@ final request = op.ChangeTranportCubesStateRequest(
   bool isCubeSelected(int cubeId) {
     return _selectedCubes.contains(cubeId);
   }
-  
+
   // Actualiza localmente el estado de cubos específicos (solo para navegación UI)
   // NO hace llamadas al backend - solo para que los cubos "se muevan" a otras pestañas
   void updateLocalCubeStates(List<int> cubeIds, String newState) {
@@ -516,14 +512,14 @@ final request = op.ChangeTranportCubesStateRequest(
       'Updating local cube states for UI navigation:\n- Cubes: ${cubeIds.join(", ")}\n- New state: $newState',
       name: 'TransportCubeProvider',
     );
-    
+
     bool stateChanged = false;
-    
+
     for (final cubeId in cubeIds) {
       final cubeIndex = _cubes.indexWhere((cube) => cube.id == cubeId);
       if (cubeIndex != -1) {
         final currentCube = _cubes[cubeIndex];
-        
+
         // Crear nueva instancia del cubo con estado actualizado
         final updatedCube = op.TransportCubeInfoAPI(
           id: currentCube.id,
@@ -532,17 +528,17 @@ final request = op.ChangeTranportCubesStateRequest(
           guides: currentCube.guides,
           stateLabel: TransportCubeState.getLabel(newState),
         );
-        
+
         _cubes[cubeIndex] = updatedCube;
         stateChanged = true;
-        
+
         developer.log(
           'Local state updated: Cube $cubeId from ${currentCube.state} to $newState',
           name: 'TransportCubeProvider',
         );
       }
     }
-    
+
     if (stateChanged) {
       // Limpiar selección ya que los cubos se "movieron"
       _selectedCubes.clear();

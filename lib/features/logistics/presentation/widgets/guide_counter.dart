@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Widget que muestra un contador de guías
+/// Widget que muestra un contador de guías con barra de progreso
 class GuideCounter extends StatelessWidget {
   final int total;
   final int processed;
@@ -14,7 +14,11 @@ class GuideCounter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final percentage = (processed / total * 100).round();
+
+    // Proteger cuando total = 0
+    final safeTotal = total == 0 ? 1 : total;
+    final percentageValue = processed / safeTotal;
+    final percentage = (percentageValue * 100).clamp(0, 100).round();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,9 +43,9 @@ class GuideCounter extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: processed / total,
+            value: percentageValue.clamp(0.0, 1.0),
             minHeight: 8,
-            backgroundColor: theme.colorScheme.surfaceVariant,
+            backgroundColor: theme.colorScheme.surfaceContainerHighest,
           ),
         ),
       ],
