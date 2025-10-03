@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../models/api_response.dart';
 import '../models/api_error.dart';
+import 'version_service.dart';
 
 /// Servicio base para peticiones HTTP
 class HttpService {
@@ -13,11 +14,17 @@ class HttpService {
   Function()? onSessionExpired;
   Function()? onTokenRefreshNeeded;
   bool _isHandlingExpiredSession = false;
+  Function(VersionResponse)? onVersionCheckRequired;
 
   /// Callback para refrescar el token cuando sea necesario
   Function()? get tokenRefreshCallback => onTokenRefreshNeeded;
   set tokenRefreshCallback(Function()? callback) {
     onTokenRefreshNeeded = callback;
+  }
+
+  /// Callback para manejar actualizaciones de versión requeridas
+  set versionCheckCallback(Function(VersionResponse)? callback) {
+    onVersionCheckRequired = callback;
   }
 
   /// Sanitiza el cuerpo para logs, removiendo 'message' y preservando 'messageDetail'
@@ -61,7 +68,31 @@ class HttpService {
     // Asegurar formato correcto del token
     _token = token.startsWith('Bearer ') ? token : 'Bearer $token';
     AppLogger.log('Token set: $_token', source: 'HttpService', type: 'AUTH');
-    _isHandlingExpiredSession = false; // Resetear flag al establecer nuevo token
+      _isHandlingExpiredSession = false; // Resetear flag al establecer nuevo token
+  }
+
+  /// Verifica los headers de respuesta para detectar requerimientos de actualización
+  void _checkVersionHeaders(Map<String, String> responseHeaders) {
+    try {
+      final versionResponse = VersionResponse.fromHeaders(responseHeaders);
+      
+      if (versionResponse.updateRequired || versionResponse.updateAvailable) {
+        AppLogger.log(
+          'Version check response: updateRequired=${versionResponse.updateRequired}, '
+          'updateAvailable=${versionResponse.updateAvailable}, '
+          'minVersion=${versionResponse.minVersion}',
+          source: 'HttpService'
+        );
+        
+        onVersionCheckRequired?.call(versionResponse);
+      }
+    } catch (e) {
+      // Error procesando headers de versión, continuar normalmente
+      AppLogger.log(
+        'Error checking version headers: $e',
+        source: 'HttpService'
+      );
+    }
   }
 
   /// Obtiene los headers comunes para las peticiones
@@ -69,6 +100,7 @@ class HttpService {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     if (_token != null) 'Authorization': _token!,
+    ...VersionService.instance.versionHeaders,
   };
 
   /// Maneja una respuesta 401 o error de sesión
@@ -136,6 +168,9 @@ class HttpService {
         statusCode: response.statusCode,
         body: sanitizedBody,
       );
+
+      // Verificar headers de versión
+      _checkVersionHeaders(response.headers);
 
       Map<String, dynamic> json;
       String? messageDetail;
@@ -248,6 +283,9 @@ if (code == ApiErrorCode.sessionExpired || code == ApiErrorCode.invalidToken) {
       developer.log('Response Status: ${response.statusCode}', name: 'HttpService');
       final sanitizedBody = _sanitizeBodyForLog(baseUrl + path, response.body);
       developer.log('Response Body: $sanitizedBody', name: 'HttpService');
+
+      // Verificar headers de versión
+      _checkVersionHeaders(response.headers);
 
       Map<String, dynamic> json;
       String? messageDetail;

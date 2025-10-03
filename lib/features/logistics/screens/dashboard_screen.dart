@@ -5,6 +5,7 @@ import '../models/auth_models.dart';
 import '../presentation/helpers/error_helper.dart';
 import '../presentation/widgets/loading_indicator.dart';
 import '../presentation/widgets/app_drawer.dart';
+import '../../../core/services/version_service.dart';
 
 /// Pantalla principal del dashboard
 class DashboardScreen extends StatefulWidget {
@@ -31,24 +32,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
       ),
       drawer: const AppDrawer(),
-      body: RefreshIndicator(
-        onRefresh: _refreshDashboard,
-        child: auth.isLoading
-            ? const LoadingIndicator(
-          message: 'Cargando dashboard...',
-        )
-            : auth.error != null
-            ? ErrorHelper.buildErrorWidget(
-          error: auth.error!,
-          onRetry: _refreshDashboard,
-        )
-            : _buildDashboard(context),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshDashboard,
+            child: auth.isLoading
+                ? const LoadingIndicator(
+              message: 'Cargando dashboard...',
+            )
+                : auth.error != null
+                ? ErrorHelper.buildErrorWidget(
+              error: auth.error!,
+              onRetry: _refreshDashboard,
+            )
+                : _buildDashboard(context),
+          ),
+          // Versión flotando en el borde inferior
+          Positioned(
+            bottom: 16,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Text(
+                'v${VersionService.instance.version}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[500],
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -3,10 +3,12 @@ import 'dart:developer' as developer;
 import '../../../core/services/app_logger.dart';
 import '../services/auth_service.dart';
 import '../models/auth_models.dart';
+import '../../../core/services/secure_credentials_service.dart';
 
 /// Provider para manejar la autenticación
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService;
+  final SecureCredentialsService _secureStorage = SecureCredentialsService();
   
   bool _isLoading = false;
   String? _error;
@@ -26,12 +28,35 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         notifyListeners();
         
-        // Validar que el token aún sea válido, si no lo es, limpiar sin marcar la sesión como cerrada manualmente
+        // Validar que el token aún sea válido
         final isValid = await _authService.hasValidToken();
         if (!isValid) {
-          _isAuthenticated = false;
-          _loginData = null;
-          notifyListeners();
+          // Intentar login silencioso con credenciales guardadas
+          final saved = await _secureStorage.getCredentials();
+          final username = saved['username'];
+          final password = saved['password'];
+          
+          if (username != null && password != null) {
+            developer.log('Token invalid, attempting silent login on app start', name: 'AuthProvider');
+            final success = await login(username, password);
+            if (!success) {
+              await logout();
+            }
+          } else {
+            _isAuthenticated = false;
+            _loginData = null;
+            notifyListeners();
+          }
+        }
+      } else {
+        // No hay sesión activa, intentar login silencioso
+        final saved = await _secureStorage.getCredentials();
+        final username = saved['username'];
+        final password = saved['password'];
+        
+        if (username != null && password != null) {
+          developer.log('No active session, attempting silent login', name: 'AuthProvider');
+          await login(username, password);
         }
       }
     } catch (e) {
@@ -73,6 +98,10 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = true;
         _error = null;
         notifyListeners();
+        
+        // Guardar credenciales en almacenamiento seguro (login silencioso futuro)
+        await _secureStorage.saveCredentials(username, password);
+        
         AppLogger.log('Login successful - Token received', source: 'AuthProvider', type: 'SUCCESS');
         return true;
       } else {
@@ -102,6 +131,9 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _authService.logout();
     } finally {
+      // Limpiar credenciales del almacenamiento seguro
+      await _secureStorage.clearCredentials();
+      
       _isAuthenticated = false;
       _loginData = null;
       _error = null;
@@ -116,9 +148,21 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = hasValidToken;
       
       if (!hasValidToken) {
-        // Si el token no es válido, hacer logout
-        developer.log('Token invalid, logging out', name: 'AuthProvider');
-        await logout();
+        // Intentar login silencioso con credenciales guardadas
+        final saved = await _secureStorage.getCredentials();
+        final u = saved['username'];
+        final p = saved['password'];
+        if (u != null && p != null) {
+          developer.log('Attempting silent login with stored credentials', name: 'AuthProvider');
+          final silentOk = await login(u, p);
+          _isAuthenticated = silentOk;
+        }
+        
+        // Si aún no está autenticado, hacer logout
+        if (!_isAuthenticated) {
+          developer.log('Token invalid and silent login failed, logging out', name: 'AuthProvider');
+          await logout();
+        }
       } else {
         developer.log('Token is valid', name: 'AuthProvider');
       }

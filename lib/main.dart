@@ -24,9 +24,11 @@ import 'features/logistics/screens/warehouse_reception_details_screen.dart';
 import 'features/logistics/screens/client_dispatch_details_screen.dart';
 import 'features/logistics/screens/new_transport_cube_screen.dart';
 import 'features/logistics/services/guide_details_service.dart';
+import 'features/logistics/screens/guide_scanner_details_screen.dart';
+import 'core/services/version_service.dart';
+import 'core/services/app_update_service.dart';
 import 'features/logistics/services/guide_validation_service.dart';
 import 'features/logistics/providers/guide_validation_provider.dart';
-import 'features/logistics/screens/guide_scanner_details_screen.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -92,6 +94,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _initializeServices() {
+    // Inicializar servicio de versión
+    VersionService.instance.initialize();
+    
     // Servicios base
     storageService = StorageService();
     httpService = HttpService(
@@ -114,6 +119,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       debugPrint('Token refresh needed - attempting refresh');
       return await authService.refreshTokenIfNeeded();
     };
+    
+    // Configurar callback de versión
+    httpService.versionCheckCallback = (versionResponse) {
+      final context = appNavigatorKey.currentContext;
+      AppUpdateService.instance.handleVersionResponse(context, versionResponse);
+    };
+    
     // Verificación/refresh periódico del token
     _startTokenRefreshTimer();
   }
