@@ -77,7 +77,7 @@ class AuthProvider extends ChangeNotifier {
         return true;
       } else {
         _error = response.messageDetail;
-        AppLogger.error('Login failed', error: _error, source: 'AuthProvider');
+        AppLogger.error('Login failed', error: _error ?? 'No message detail provided', source: 'AuthProvider');
         notifyListeners();
         return false;
       }

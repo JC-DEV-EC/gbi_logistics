@@ -19,15 +19,18 @@ class LoginRequest {
 class SubcourierInfo {
   final int id;
   final String? name;
+  final bool? showClients;
 
   const SubcourierInfo({
     required this.id,
     this.name,
+    this.showClients,
   });
 
   factory SubcourierInfo.fromJson(Map<String, dynamic> json) => SubcourierInfo(
     id: json['id'] as int,
     name: json['name'] as String?,
+    showClients: json['showClients'] as bool?,
   );
 }
 
@@ -113,6 +116,7 @@ class LoginResponse {
           .map((e) => {
             'id': e.id,
             'name': e.name,
+            'showClients': e.showClients,
           })
           .toList(),
       'dashboardData': {

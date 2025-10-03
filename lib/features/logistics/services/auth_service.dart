@@ -54,7 +54,7 @@ class AuthService {
         await _storage.setLoginData(loginData.toJson());
       } else if (!response.isSuccessful) {
         return ApiResponse.error(
-          messageDetail: response.messageDetail ?? '',
+          messageDetail: response.messageDetail,  // Solo el mensaje del backend
           content: LoginResponse.empty(),
         );
       }
@@ -62,7 +62,7 @@ class AuthService {
       return response;
     } catch (e) {
       return ApiResponse.error(
-        messageDetail: null,  // Let backend provide error message
+        messageDetail: null,  // Dejar que el backend proporcione el mensaje
         content: LoginResponse.empty(),
       );
     }

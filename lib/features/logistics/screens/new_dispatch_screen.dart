@@ -1,85 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/transport_cube_provider.dart';
+import '../presentation/widgets/subcourier_client_selector.dart';
+import '../presentation/widgets/guide_validation_scan_box.dart';
 import '../models/transport_cube_state.dart';
-import '../presentation/helpers/error_helper.dart';
 
-class NewTransportCubeScreen extends StatefulWidget {
-  const NewTransportCubeScreen({super.key});
+/// Pantalla para crear nuevo despacho directo a cliente
+class NewDispatchScreen extends StatefulWidget {
+  const NewDispatchScreen({super.key});
 
   @override
-  State<NewTransportCubeScreen> createState() => _NewTransportCubeScreenState();
+  State<NewDispatchScreen> createState() => _NewDispatchScreenState();
 }
 
-class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
-  final TextEditingController _guideController = TextEditingController();
-  final List<String> _guides = [];
+class _NewDispatchScreenState extends State<NewDispatchScreen> {
+  final List<String> _validatedGuides = [];
+  int? _selectedSubcourierId;
+  String? _selectedClientId;
   bool _isProcessing = false;
 
-  @override
-  void dispose() {
-    _guideController.dispose();
-    super.dispose();
-  }
-
-  void _addGuide(String? guide) {
-    if (guide == null || guide.isEmpty) return;
-
-    final cleanGuide = guide.trim();
-    if (cleanGuide.isEmpty) return;
-
-    setState(() {
-      if (!_guides.contains(cleanGuide)) {
-        _guides.insert(0, cleanGuide);
-      }
-      _guideController.clear();
-    });
+  void _onGuideValidated(String guide) {
+    if (!_validatedGuides.contains(guide)) {
+      setState(() {
+        _validatedGuides.insert(0, guide); // Insertar al inicio para mostrar las nuevas primero
+      });
+    }
   }
 
   void _removeGuide(String guide) {
     setState(() {
-      _guides.remove(guide);
+      _validatedGuides.remove(guide);
     });
   }
 
-  Future<void> _createCube() async {
-    if (_guides.isEmpty) {
+  Future<void> _createDispatchCube() async {
+    if (_validatedGuides.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(''),  // Let backend provide the message
+          content: Text('Agregue al menos una guía para crear el despacho'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
+    // Capturar el messenger antes de las operaciones async
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      final apiResp = await context.read<TransportCubeProvider>().createTransportCube(_guides);
+      // Refrescar token primero
+      final authProvider = context.read<AuthProvider>();
+      await authProvider.ensureFreshToken();
 
       if (!mounted) return;
 
-      if (apiResp.isSuccessful) {
-        final provider = context.read<TransportCubeProvider>();
-        // Asegurar que estamos en el estado correcto después de crear el cubo
-        await provider.changeState(TransportCubeState.created);
-        
+      final provider = context.read<TransportCubeProvider>();
+      
+      // Crear el cubo y establecerlo directamente en estado Downloaded
+      final response = await provider.createTransportCube(_validatedGuides);
+
+      if (!mounted) return;
+
+      if (response.isSuccessful) {
+        // Cambiar inmediatamente al estado Downloaded (despacho a cliente)
+        final cubeId = response.content?.content?.id;
+        if (cubeId != null) {
+          await provider.changeSelectedCubesState(TransportCubeState.downloaded);
+          await provider.loadCubes(force: true);
+        }
+
         if (!mounted) return;
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiResp.messageDetail ?? ''),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ErrorHelper.showErrorSnackBar(context, apiResp.messageDetail ?? '');
       }
-    } catch (e) {
-      ErrorHelper.showErrorSnackBar(context, e);
+
+      // Mostrar mensaje del backend (éxito o error)
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(response.messageDetail ?? ''),
+          backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -95,32 +100,32 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nuevo Cubo'),
+        title: const Text('Nuevo Despacho'),
       ),
       body: Column(
         children: [
-          // Entrada de guías
+          // Selectores de subcourier y cliente
           Padding(
             padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _guideController,
-              decoration: InputDecoration(
-                labelText: 'Guía',
-                hintText: 'Escanee o ingrese el código de la guía',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _addGuide(_guideController.text),
-                ),
-              ),
-              onSubmitted: _addGuide,
-              enabled: !_isProcessing,
+            child: SubcourierClientSelector(
+              onSubcourierSelected: (id) => setState(() => _selectedSubcourierId = id),
+              onClientSelected: (id) => setState(() => _selectedClientId = id),
             ),
           ),
 
-          // Lista de guías agregadas
+          // Scanner de guías con validación
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GuideValidationScanBox(
+              selectedSubcourierId: _selectedSubcourierId,
+              selectedClientId: _selectedClientId,
+              onGuideValidated: _onGuideValidated,
+            ),
+          ),
+
+          // Lista de guías validadas
           Expanded(
-            child: _guides.isEmpty
+            child: _validatedGuides.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -149,10 +154,10 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _guides.length,
+                    itemCount: _validatedGuides.length,
                     separatorBuilder: (_, __) => const Divider(),
                     itemBuilder: (context, index) {
-                      final guide = _guides[index];
+                      final guide = _validatedGuides[index];
                       return ListTile(
                         leading: const Icon(Icons.inventory_2_outlined),
                         title: Text(guide),
@@ -174,7 +179,9 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isProcessing || _guides.isEmpty ? null : _createCube,
+                  onPressed: _isProcessing || _validatedGuides.isEmpty
+                      ? null
+                      : _createDispatchCube,
                   icon: _isProcessing
                       ? const SizedBox(
                           width: 24,
@@ -182,7 +189,7 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
                           child: CircularProgressIndicator(),
                         )
                       : const Icon(Icons.add),
-                  label: const Text('Crear Cubo'),
+                  label: const Text('Crear Despacho'),
                 ),
               ),
             ],

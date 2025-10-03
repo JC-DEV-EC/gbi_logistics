@@ -66,7 +66,7 @@ class AppDrawer extends StatelessWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.home_outlined),
-            title: const Text('Despacho a Cliente'),
+            title: const Text('Despacho en Bodega'),
             onTap: () {
               Navigator.pushReplacementNamed(context, '/client-dispatch');
             },

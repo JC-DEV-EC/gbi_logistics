@@ -6,7 +6,7 @@ class ApiConfig {
   /// Intervalo para verificar el estado del token (5 minutos)
   static const tokenCheckInterval = Duration(minutes: 5);
   /// URL base de la API
-  static const String baseUrl = 'https://internalapi.gbilogistics.net';
+  static const String baseUrl = 'https://testapi.gbilogistics.net/internaldev';
 
   /// Versión de la API
   static const String version = '1.0';
@@ -25,6 +25,7 @@ class ApiEndpoints {
   static String get auth => ApiConfig.buildUrl('/Auth');
   static String get dashboard => ApiConfig.buildUrl('/Dashboard');
   static String get guide => ApiConfig.buildUrl('/Guide');
+  static String get client => ApiConfig.buildUrl('/Client');
 
   // Auth endpoints
   static String get login => ApiConfig.buildUrl('/Auth/login');
@@ -42,4 +43,8 @@ class ApiEndpoints {
   static String get changeTransportCubeState => ApiConfig.buildUrl('/Guide/change-transport-cube-state');
   static String get changeCubeGuide => ApiConfig.buildUrl('/Guide/change-cube-guide');
   static String get guidesPaginated => ApiConfig.buildUrl('/Guide/guides-paginated');
+  static String get validateGuideStatusByProcess => ApiConfig.buildUrl('/Guide/validate-guide-status-by-process');
+
+  // Client endpoints
+  static String get getClientBySubcourier => ApiConfig.buildUrl('/Client/by-subcourier');
 }

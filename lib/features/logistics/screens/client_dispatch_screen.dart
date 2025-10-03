@@ -20,7 +20,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Despacho a Cliente'),
+        title: const Text('Despacho en Bodega'),
       ),
       drawer: const AppDrawer(),
       body: Consumer2<GuideProvider, AuthProvider>(
@@ -49,24 +49,6 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
       child: Autocomplete<int>(
         key: ValueKey(guideProvider.selectedSubcourierId),
         fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-          void showAllOptions() {
-            if (!focusNode.hasFocus) {
-              focusNode.requestFocus();
-            }
-            // Forzar un cambio para que Autocomplete abra el overlay
-            final original = textEditingController.text;
-            textEditingController.value = textEditingController.value.copyWith(
-              text: '$original ',
-              selection: TextSelection.collapsed(offset: original.length + 1),
-            );
-            Future.microtask(() {
-              textEditingController.value = textEditingController.value.copyWith(
-                text: original,
-                selection: TextSelection.collapsed(offset: original.length),
-              );
-            });
-          }
-
           return TextFormField(
             controller: textEditingController,
             focusNode: focusNode,
@@ -74,24 +56,14 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
               labelText: 'Seleccionar Subcourier',
               hintText: 'Escriba o seleccione un subcourier',
               border: const OutlineInputBorder(),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    tooltip: 'Buscar subcourier',
-                    onPressed: () {
-                      if (!focusNode.hasFocus) {
-                        focusNode.requestFocus();
-                      }
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_drop_down),
-                    tooltip: 'Ver todos',
-                    onPressed: showAllOptions,
-                  ),
-                ],
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: 'Buscar subcourier',
+                onPressed: () {
+                  if (!focusNode.hasFocus) {
+                    focusNode.requestFocus();
+                  }
+                },
               ),
             ),
           );

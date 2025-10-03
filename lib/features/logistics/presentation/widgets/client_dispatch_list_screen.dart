@@ -16,13 +16,8 @@ class ClientDispatchListScreen extends StatefulWidget {
 }
 
 class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
-  // Estados permitidos para despacho a cliente y sus etiquetas
-  static const Map<String, String> stateLabels = {
-    'ReceivedInLocalWarehouse': 'Recibido en Bodega',
-    'DispatchedFromCustomsWithOutCube': 'Despachado sin Cubo'
-  };
 
-  String _selectedState = 'ReceivedInLocalWarehouse';  // Estado inicial
+  final String _selectedState = 'ReceivedInLocalWarehouse';  // Estado inicial
 
   @override
   void initState() {
@@ -49,30 +44,9 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<GuideProvider>();
-    final theme = Theme.of(context);
 
     return Column(
       children: [
-        // Filtro de estados
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: SegmentedButton<String>(
-              segments: stateLabels.entries.map((e) => ButtonSegment<String>(
-                value: e.key,
-                label: Text(e.value),
-              )).toList(),
-            selected: {_selectedState},
-            onSelectionChanged: (Set<String> selection) {
-              final newState = selection.first;
-              setState(() {
-                _selectedState = newState;
-              });
-              // Actualizar el estado en el provider
-              context.read<GuideProvider>().setClientDispatchFilterState(newState);
-              _loadGuides();
-            },
-          ),
-        ),
         // Lista con refresh
         Expanded(
           child: RefreshIndicator(
@@ -117,9 +91,7 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedState == 'ReceivedInLocalWarehouse'
-                ? 'No hay guías recibidas en bodega'
-                : 'No hay guías despachadas sin cubo',
+              'No hay guías recibidas en bodega',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -170,7 +142,7 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                     ? theme.colorScheme.primary
                     : isSelected
                       ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withOpacity(0.2),
+                      : theme.colorScheme.outline.withValues(alpha: 51),
                   width: uiState == 'scanned' || isSelected ? 2 : 1,
                 ),
                 borderRadius: BorderRadius.circular(8),
@@ -256,7 +228,7 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                           ),
                           Chip(
                             label: Text(guide.stateLabel ?? 'Desconocido'),
-                            backgroundColor: theme.colorScheme.surfaceVariant,
+                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
                           ),
                         ],
                       ),
@@ -273,7 +245,6 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
   }
 
   void _showGuideDetails(BuildContext context, dynamic guide) {
-    final theme = Theme.of(context);
 
     showDialog(
       context: context,

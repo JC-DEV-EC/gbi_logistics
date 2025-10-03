@@ -59,10 +59,6 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
     return _lastDetails!;
   }
 
-  // Método para limpiar los detalles cacheados
-  void _clearDetailsCache() {
-    _lastDetails = null;
-  }
 
   Future<void> _refreshDetails() async {
     await refreshDetails();
@@ -176,7 +172,7 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
                 const SizedBox(height: 16),
                 GuideCounter(
                   total: details.guides.length,
-                  processed: details.guides.where((g) => g.state != GuideTransportCubeState.ENTERED).length,
+                  processed: details.guides.where((g) => g.state != GuideTransportCubeState.entered).length,
                 ),
               ],
             ),
@@ -247,14 +243,14 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
+          /*ListTile(
             leading: const Icon(Icons.swap_horiz),
             title: const Text('Mover a otro cubo'),
             onTap: () {
               Navigator.pop(context);
               _showMoveGuideDialog(context, guide);
             },
-          ),
+          ),*/
           ListTile(
             leading: const Icon(Icons.delete_outline),
             title: const Text('Eliminar del cubo'),
@@ -270,13 +266,11 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
     );
   }
 
-  Future<void> _showMoveGuideDialog(BuildContext context, dynamic guide) async {
-    final provider = context.read<TransportCubeProvider>();
+  /*Future<void> _showMoveGuideDialog(BuildContext context, dynamic guide) async {
     // Implementar lógica de mover guía
-  }
+  }*/
 
   Future<void> _showRemoveGuideDialog(BuildContext context, dynamic guide) async {
-    final provider = context.read<TransportCubeProvider>();
     // Implementar lógica de eliminar guía
   }
 }

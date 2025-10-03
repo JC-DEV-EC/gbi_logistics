@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as developer;
-import 'dart:math' show max;
 import '../../../core/services/app_logger.dart';
 import '../../../core/models/api_response.dart';
 import '../services/transport_cube_service.dart';
@@ -15,14 +14,12 @@ class TransportCubeProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _lastMessageDetail;
-  String _selectedState = TransportCubeState.CREATED; // Estado inicial cuando el cubo se crea en aduana
+  String _selectedState = TransportCubeState.created; // Estado inicial cuando el cubo se crea en aduana
   final Map<int, bool> _loadingDetails = {}; // Rastrear peticiones de detalles por cubeId
   List<op.TransportCubeInfoAPI> _cubes = [];
   TransportCubeDetails? _selectedCubeDetails;
   final Set<int> _selectedCubes = {};
   final TransportCubeService _service;
-  // Cache de futures de detalles por cubo para evitar llamadas duplicadas
-  final Map<int, Future<TransportCubeDetails>> _detailsFutures = {};
 
   // Exponer service para uso interno
   TransportCubeService get service => _service;

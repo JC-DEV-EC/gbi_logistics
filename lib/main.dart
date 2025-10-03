@@ -24,6 +24,8 @@ import 'features/logistics/screens/warehouse_reception_details_screen.dart';
 import 'features/logistics/screens/client_dispatch_details_screen.dart';
 import 'features/logistics/screens/new_transport_cube_screen.dart';
 import 'features/logistics/services/guide_details_service.dart';
+import 'features/logistics/services/guide_validation_service.dart';
+import 'features/logistics/providers/guide_validation_provider.dart';
 import 'features/logistics/screens/guide_scanner_details_screen.dart';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -77,6 +79,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final GuideService guideService;
   late final TransportCubeService transportCubeService;
   late final GuideDetailsService guideDetailsService;
+  late final GuideValidationService guideValidationService;
   Timer? _tokenRefreshTimer;
   AuthLifecycleObserver? _authObserver;
 
@@ -104,6 +107,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     guideService = GuideService(httpService);
     transportCubeService = TransportCubeService(httpService);
     guideDetailsService = GuideDetailsService(httpService);
+    guideValidationService = GuideValidationService(httpService);
     
     // Configurar callback de refresh token después de tener el authService
     httpService.tokenRefreshCallback = () async {
@@ -167,6 +171,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
         Provider<GuideDetailsService>(
           create: (_) => guideDetailsService,
+        ),
+        ChangeNotifierProvider<GuideValidationProvider>(
+          create: (_) => GuideValidationProvider(guideValidationService),
         ),
       ],
       child: MaterialApp(

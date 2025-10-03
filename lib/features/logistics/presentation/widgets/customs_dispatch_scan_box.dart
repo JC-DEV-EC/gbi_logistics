@@ -135,27 +135,13 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
             const SizedBox(height: 16),
 
             // Botones de acción
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _complete(createCube: true),
-                    icon: const Icon(Icons.add_box),
-                    label: Text('Crear Cubo (${_scannedGuides.length} guías)'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _complete(createCube: false),
-                    icon: const Icon(Icons.update),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                    ),
-                    label: Text('Actualizar estado (${_scannedGuides.length})'),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _complete(createCube: true),
+                icon: const Icon(Icons.add_box),
+                label: Text('Crear Cubo (${_scannedGuides.length} guías)'),
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -168,21 +154,26 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
                   border: Border.all(color: theme.colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(8),
-                  shrinkWrap: true,
-                  itemCount: _scannedGuides.length,
-                  separatorBuilder: (context, index) => const Divider(),
-                  itemBuilder: (context, index) {
-                    final guide = _scannedGuides.elementAt(index);
-                    return ListTile(
-                      leading: const Icon(Icons.inventory_2_outlined),
-                      title: Text(guide),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        color: Colors.red,
-                        onPressed: () => _removeGuide(guide),
-                      ),
+                child: Builder(
+                  builder: (context) {
+                    final guidesList = _scannedGuides.toList().reversed.toList();
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(8),
+                      shrinkWrap: true,
+                      itemCount: guidesList.length,
+                      separatorBuilder: (context, index) => const Divider(),
+                      itemBuilder: (context, index) {
+                        final guide = guidesList[index];
+                        return ListTile(
+                          leading: const Icon(Icons.inventory_2_outlined),
+                          title: Text(guide),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.remove_circle_outline),
+                            color: Colors.red,
+                            onPressed: () => _removeGuide(guide),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),

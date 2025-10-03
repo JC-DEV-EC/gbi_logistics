@@ -19,6 +19,7 @@ import '../presentation/widgets/customs_dispatch_scan_box.dart';
 
 // Screens
 import 'transport_cube_list_screen.dart';
+import 'new_dispatch_screen.dart';
 
 /// Pantalla para despacho en aduana
 class CustomsDispatchScreen extends StatefulWidget {
@@ -113,7 +114,7 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       appBar: AppBar(
         title: const Text('Despacho en Aduana'),
         actions: [
-          if (hasSelectedCubes)
+          if (hasSelectedCubes) ...[            
             TextButton.icon(
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
@@ -141,9 +142,41 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
               },
               icon: const Icon(Icons.local_shipping),
               label: Text(
-                'Enviar a Tránsito ${provider.selectedCubeIds.length} cubos',
+                'Tránsito (${provider.selectedCubeIds.length})',
               ),
             ),
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                
+                // Enviar cubos seleccionados a estado Despacho a Cliente (Downloaded)
+                final resp = await provider.changeSelectedCubesState(
+                  TransportCubeState.downloaded,
+                );
+                if (!mounted) return;
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      resp.messageDetail ?? '',
+                    ),
+                    backgroundColor:
+                    resp.isSuccessful ? Colors.green : Colors.red,
+                  ),
+                );
+
+                if (resp.isSuccessful) {
+                  // Recargar listado actualizado y limpiar selección
+                  await provider.loadCubes(force: true);
+                }
+              },
+              icon: const Icon(Icons.home_outlined),
+              label: Text(
+                'Despacho (${provider.selectedCubeIds.length})',
+              ),
+            ),
+          ],
         ],
       ),
       body: const TransportCubeListScreen(
@@ -151,10 +184,34 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
         initialState: VisualStates.created,
         showHistoric: false,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCustomsDispatchDialog(),
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo Cubo'),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: 'btn1',
+              onPressed: () => _showCustomsDispatchDialog(),
+              icon: const Icon(Icons.add_box),
+              label: const Text('Nuevo Cubo'),
+            ),
+            const SizedBox(height: 8),
+            FloatingActionButton.extended(
+              heroTag: 'btn2',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const NewDispatchScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.local_shipping),
+              label: const Text('Nuevo Despacho'),
+            ),
+          ],
+        ),
       ),
     );
   }

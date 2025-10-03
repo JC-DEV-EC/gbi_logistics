@@ -31,7 +31,7 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
     logState('Checking authentication state');
     final authProvider = context.read<AuthProvider>();
     await authProvider.checkAuthState();
-    
+
     if (mounted && authProvider.isAuthenticated) {
       logState('User already authenticated');
       logNavigation('/dashboard');
@@ -57,6 +57,7 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
   Future<void> _handleSubmit() async {
     logButton('Login Submit');
     logState('Starting login submission');
+
     if (!_formKey.currentState!.validate()) {
       logError('Form validation failed');
       return;
@@ -73,18 +74,20 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
     );
 
     if (success && mounted) {
-      developer.log('Login successful - Navigating to dashboard', name: 'LoginScreen');
+      developer.log('Login successful - Navigating to dashboard',
+          name: 'LoginScreen');
       Navigator.pushReplacementNamed(context, '/dashboard');
     } else {
       developer.log('Login failed', name: 'LoginScreen');
-      // Mostrar el error en un snackbar para mejor visibilidad
+
       if (mounted) {
         final error = context.read<AuthProvider>().error;
-        if (error != null) {
+        if (error != null && error.isNotEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(error),
               backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 10),
             ),
           );
         }
@@ -112,18 +115,17 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                   children: [
                     // Logo principal con altura flexible
                     SizedBox(
-                      width: MediaQuery.of(context).size.width * 0.5,  // Reducido a 50%
-                      height: 120,  // Altura fija para el logo
+                      width: MediaQuery.of(context).size.width * 0.5,
+                      height: 120,
                       child: Image.asset(
                         'assets/images/logo.png',
                         fit: BoxFit.contain,
                       ),
                     ),
-                    const SizedBox(height: 16),  // Espaciado reducido
-                    // Texto "Conectando el Mundo"
+                    const SizedBox(height: 16),
                     Text(
                       'Conectando el Mundo',
-                      style: theme.textTheme.titleLarge?.copyWith(  // Reducido el tamaño
+                      style: theme.textTheme.titleLarge?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w500,
                       ),
@@ -132,6 +134,8 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 48),
+
+                // Card con formulario
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
@@ -146,6 +150,8 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 24),
+
+                          // Usuario
                           TextFormField(
                             controller: _usernameController,
                             decoration: const InputDecoration(
@@ -165,8 +171,11 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                             },
                           ),
                           const SizedBox(height: 16),
+
+                          // Contraseña
                           TextFormField(
                             controller: _passwordController,
+                            obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               labelText: 'Contraseña',
                               prefixIcon: const Icon(Icons.lock_outline),
@@ -176,15 +185,14 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                                       ? Icons.visibility_outlined
                                       : Icons.visibility_off_outlined,
                                 ),
-                            onPressed: () {
-                              logButton('Toggle Password Visibility');
-                              _togglePasswordVisibility();
-                            },
+                                onPressed: () {
+                                  logButton('Toggle Password Visibility');
+                                  _togglePasswordVisibility();
+                                },
                               ),
                             ),
-                            obscureText: _obscurePassword,
                             onChanged: (value) {
-logTextInput('password', '*' * value.length);
+                              logTextInput('password', '*' * value.length);
                               context.read<AuthProvider>().clearError();
                             },
                             validator: (value) {
@@ -195,6 +203,8 @@ logTextInput('password', '*' * value.length);
                             },
                             onFieldSubmitted: (_) => _handleSubmit(),
                           ),
+
+                          // Error
                           if (auth.error != null) ...[
                             const SizedBox(height: 16),
                             Text(
@@ -206,16 +216,18 @@ logTextInput('password', '*' * value.length);
                             ),
                           ],
                           const SizedBox(height: 24),
+
+                          // Botón de login
                           FilledButton(
                             onPressed: auth.isLoading ? null : _handleSubmit,
                             child: auth.isLoading
                                 ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
                                 : const Text('Ingresar'),
                           ),
                         ],
