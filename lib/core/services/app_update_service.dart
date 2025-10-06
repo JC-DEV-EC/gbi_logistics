@@ -30,10 +30,13 @@ class AppUpdateService {
   void _showForceUpdateDialog(BuildContext context, VersionResponse versionResponse) {
     if (_isShowingUpdateDialog) return;
     _isShowingUpdateDialog = true;
+
+    // Navigator.of(context).popUntil((route) => route.isFirst); // Opcional: Volver a la primera ruta
     
     showDialog(
       context: context,
       barrierDismissible: false,
+      useRootNavigator: true, // Usar el navigator raíz para asegurar que el diálogo esté sobre todo
       builder: (context) => PopScope(
         canPop: false, // Prevenir cierre con botón atrás
         child: AlertDialog(
@@ -71,7 +74,11 @@ class AppUpdateService {
           ),
           actions: [
             ElevatedButton.icon(
-              onPressed: () => _openAppStore(versionResponse.updateUrl),
+              onPressed: () {
+                _openAppStore(versionResponse.updateUrl);
+                // Opcionalmente, cerrar la aplicación después de abrir la tienda
+                // SystemNavigator.pop(); // Descomentar si quieres forzar el cierre de la app
+              },
               icon: const Icon(Icons.download),
               label: const Text('Actualizar'),
               style: ElevatedButton.styleFrom(
@@ -183,5 +190,15 @@ class AppUpdateService {
       default:
         return 'https://gbilogistics.com/download'; // URL de descarga genérica
     }
+  }
+
+  /// Verifica si la versión actual requiere actualización
+  /// Retorna true si se requiere actualización, false si no
+  Future<bool> checkVersionBeforeLogin(BuildContext context, VersionResponse versionResponse) async {
+    if (versionResponse.updateRequired) {
+      _showForceUpdateDialog(context, versionResponse);
+      return true;
+    }
+    return false;
   }
 }

@@ -7,35 +7,32 @@ import 'loading_indicator.dart';
 
 /// Widget especializado para mostrar lista de guías en despacho a cliente
 class ClientDispatchListScreen extends StatefulWidget {
-  const ClientDispatchListScreen({
-    super.key,
-  });
+  const ClientDispatchListScreen({super.key});
 
   @override
-  State<ClientDispatchListScreen> createState() => _ClientDispatchListScreenState();
+  State<ClientDispatchListScreen> createState() =>
+      _ClientDispatchListScreenState();
 }
 
 class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
-
-  final String _selectedState = 'ReceivedInLocalWarehouse';  // Estado inicial
+  final String _selectedState = 'ReceivedInLocalWarehouse'; // Estado inicial
 
   @override
   void initState() {
     super.initState();
-    // Cargar guías al inicio y cuando se monta el widget
+    // Cargar guías al inicio
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Asegurar que el provider tenga el estado inicial correcto
-      context.read<GuideProvider>().setClientDispatchFilterState(_selectedState);
+      context
+          .read<GuideProvider>()
+          .setClientDispatchFilterState(_selectedState);
       _loadGuides();
     });
   }
 
   Future<void> _loadGuides() async {
-    // Cargar solo las guías del estado seleccionado
     await context.read<GuideProvider>().loadGuides(
       page: 1,
       pageSize: 50,
-      // Usar el estado seleccionado
       status: _selectedState,
       hideValidated: false,
     );
@@ -43,27 +40,32 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<GuideProvider>();
-
-    return Column(
-      children: [
-        // Lista con refresh
-        Expanded(
-          child: RefreshIndicator(
-      onRefresh: _loadGuides,
-      child: provider.isLoading
-          ? const LoadingIndicator(
-              message: 'Cargando guías...',
-            )
-          : provider.error != null
-              ? ErrorHelper.buildErrorWidget(
-                  error: provider.error!,
-                  onRetry: _loadGuides,
-                )
-              : _buildGuideList(context),
+    return RepaintBoundary(
+      child: Column(
+        children: [
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadGuides,
+              child: Consumer<GuideProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoading) {
+                    return const LoadingIndicator(
+                      message: 'Cargando guías...',
+                    );
+                  }
+                  if (provider.error != null) {
+                    return ErrorHelper.buildErrorWidget(
+                      error: provider.error!,
+                      onRetry: _loadGuides,
+                    );
+                  }
+                  return _buildGuideList(context);
+                },
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -75,31 +77,26 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
       return Center(
         child: SingleChildScrollView(
           child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 64,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No hay guías listas para despacho',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.outline,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.inventory_2_outlined,
+                  size: 64, color: theme.colorScheme.outline),
+              const SizedBox(height: 16),
+              Text(
+                'No hay guías listas para despacho',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(color: theme.colorScheme.outline),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'No hay guías recibidas en bodega',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.outline,
+              const SizedBox(height: 8),
+              Text(
+                'No hay guías recibidas en bodega',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.outline),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       );
     }
 
@@ -113,71 +110,67 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
       return 0;
     });
 
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       itemCount: guides.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      cacheExtent: 200,
       itemBuilder: (context, index) {
-        // Envolver cada item en RepaintBoundary para evitar repintados innecesarios
         final guide = guides[index];
         final uiState = provider.getGuideUiState(guide.code ?? '');
         final code = guide.code ?? '';
         final isSelected = code.isNotEmpty && provider.isGuideSelected(code);
 
-        return RepaintBoundary(
-          child: Card(
-          clipBehavior: Clip.hardEdge,
-          child: InkWell(
-            onTap: () {
-              // Aquí iría la navegación a detalles de guía si es necesario
-            },
-            onLongPress: () {
-              if (code.isNotEmpty) provider.toggleGuideSelection(code);
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: uiState == 'scanned' 
-                    ? theme.colorScheme.primary
-                    : isSelected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withValues(alpha: 51),
-                  width: uiState == 'scanned' || isSelected ? 2 : 1,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Guía ${guide.code ?? '—'}',
-                          style: theme.textTheme.titleLarge,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline),
-                        onPressed: () => _showGuideDetails(context, guide),
-                        tooltip: 'Ver detalles',
-                      ),
-                    ],
+        return Padding(
+          padding: EdgeInsets.only(top: index > 0 ? 8 : 0),
+          child: RepaintBoundary(
+            child: Card(
+              clipBehavior: Clip.hardEdge,
+              child: InkWell(
+                onTap: () {
+                  // Navegación a detalles de guía si es necesario
+                },
+                onLongPress: () {
+                  if (code.isNotEmpty) provider.toggleGuideSelection(code);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: uiState == 'scanned'
+                          ? theme.colorScheme.primary
+                          : isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline.withValues(alpha: 51),
+                      width: uiState == 'scanned' || isSelected ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 16),
-                  Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (guide.subcourierName != null) ...[                        
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Guía ${guide.code ?? '—'}',
+                              style: theme.textTheme.titleLarge,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.info_outline),
+                            onPressed: () => _showGuideDetails(context, guide),
+                            tooltip: 'Ver detalles',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (guide.subcourierName != null) ...[
                         Row(
                           children: [
-                            Icon(
-                              Icons.local_shipping_outlined,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                            Icon(Icons.local_shipping_outlined,
+                                size: 20,
+                                color: theme.colorScheme.onSurfaceVariant),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -193,11 +186,9 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                       ],
                       Row(
                         children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                          Icon(Icons.calendar_today_outlined,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -212,11 +203,9 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 20,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+                          Icon(Icons.inventory_2_outlined,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -228,24 +217,23 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                           ),
                           Chip(
                             label: Text(guide.stateLabel ?? 'Desconocido'),
-                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                            backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
                           ),
                         ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
       },
     );
   }
 
   void _showGuideDetails(BuildContext context, dynamic guide) {
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -268,7 +256,7 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                 DateHelper.formatDateTime(guide.updateDateTime),
                 Icons.calendar_today_outlined,
               ),
-              if (guide.subcourierName != null) ...[              
+              if (guide.subcourierName != null) ...[
                 const SizedBox(height: 12),
                 _buildDetailRow(
                   context,
@@ -297,7 +285,8 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, String label, String value, IconData icon) {
+  Widget _buildDetailRow(
+      BuildContext context, String label, String value, IconData icon) {
     final theme = Theme.of(context);
     return Row(
       children: [
@@ -313,10 +302,7 @@ class _ClientDispatchListScreenState extends State<ClientDispatchListScreen> {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              Text(
-                value,
-                style: theme.textTheme.bodyLarge,
-              ),
+              Text(value, style: theme.textTheme.bodyLarge),
             ],
           ),
         ),

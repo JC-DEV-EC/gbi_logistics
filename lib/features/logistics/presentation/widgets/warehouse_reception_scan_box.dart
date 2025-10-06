@@ -6,12 +6,17 @@ import '../../models/operation_models.dart';
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
 import '../../services/app_sounds.dart';
+import '../../providers/guide_validation_provider.dart';
+import '../../../../core/services/app_logger.dart';
 
 /// Widget para escaneo de guías en recepción en bodega
 class WarehouseReceptionScanBox extends StatefulWidget {
   final Function(List<String>) onComplete;
 
-  const WarehouseReceptionScanBox({super.key, required this.onComplete});
+  const WarehouseReceptionScanBox({
+    super.key,
+    required this.onComplete,
+  });
 
   @override
   State<WarehouseReceptionScanBox> createState() =>
@@ -50,58 +55,89 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
 
     await _scanController.processScan(() async {
       try {
-        final response = await context.read<GuideProvider>().searchGuide(
+        // Capturar providers antes de awaits para evitar usar context tras async gaps
+        final guideProvider = context.read<GuideProvider>();
+        final validationProvider = context.read<GuideValidationProvider>();
+
+        final response = await guideProvider.searchGuide(
           cleanGuide,
           status: TrackingStateType.transitToWarehouse,
         );
 
-        if (!response.isSuccessful || response.content == null) {
+        if (!mounted) return;
+
+        final guideExists = response.isSuccessful && response.content != null;
+
+        if (!guideExists || !response.isSuccessful) {
+          // No agregar/retener guía si no es reconocida o no tiene el estado correcto
           HapticFeedback.heavyImpact();
           await AppSounds.error();
-          if (!mounted) return;
+
+          // Intentar obtener un messageDetail explícito del backend si vino vacío
+          String backendDetail = response.messageDetail ?? '';
+          if (backendDetail.isEmpty) {
+            final validationResp = await validationProvider
+                .validateGuideForCube(guideCode: cleanGuide);
+            backendDetail = validationResp.messageDetail ?? '';
+          }
+
+          // Log del messageDetail para depuración
+          AppLogger.log(
+            'Reception scan error messageDetail: $backendDetail',
+            source: 'WarehouseReception',
+          );
+
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(backendDetail),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+
+          // Si la guía estaba en la lista, removerla
+          if (_scannedGuides.contains(cleanGuide)) {
+            setState(() => _scannedGuides.remove(cleanGuide));
+          }
+        } else if (_scannedGuides.contains(cleanGuide)) {
+          // Log del messageDetail para depuración (duplicado)
+          AppLogger.log(
+            'Reception scan duplicate messageDetail: ${response.messageDetail ?? ''}',
+            source: 'WarehouseReception',
+          );
 
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(response.messageDetail ?? ''),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
             ),
           );
         } else {
-          if (_scannedGuides.contains(cleanGuide)) {
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(response.messageDetail ?? ''),
-                backgroundColor: Colors.orange,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          } else {
-            setState(() => _scannedGuides.add(cleanGuide));
-            try {
-              await AppSounds.success().timeout(const Duration(seconds: 2));
-            } catch (_) {}
-            if (!mounted) return;
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(response.messageDetail ?? ''),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
+          // Solo agregar guías validadas por el backend
+          setState(() => _scannedGuides.add(cleanGuide));
+          await AppSounds.success();
+
+          // Log del messageDetail para depuración (éxito de escaneo)
+          AppLogger.log(
+            'Reception scan success messageDetail: ${response.messageDetail ?? ''}',
+            source: 'WarehouseReception',
+          );
+
+          scaffoldMessenger.showSnackBar(
+            SnackBar(
+              content: Text(response.messageDetail ?? ''),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(8),
+            ),
+          );
         }
-      } catch (_) {
+      } catch (e) {
         if (!mounted) return;
-        final scaffoldMessenger = ScaffoldMessenger.of(context);
         await AppSounds.error();
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Error al procesar la guía'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
-        );
+        // No mostrar mensajes locales, esperar backend
       } finally {
         if (mounted) {
           _controller.clear();
@@ -126,62 +162,27 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
       newStatus: TrackingStateType.receivedInLocalWarehouse,
     );
 
-    debugPrint('[DEBUG] Enviando request con newStatus: "${TrackingStateType.receivedInLocalWarehouse}"');
-    debugPrint('[DEBUG] Guides: ${guides.join(", ")}');
-
     final response = await provider.updateGuideStatus(request);
     if (!mounted) return;
 
-    debugPrint('[DEBUG] Respuesta backend: ${response.isSuccessful}, ${response.message}, ${response.messageDetail}');
+    // Siempre mostrar el messageDetail del backend y no usar vistas adicionales
+    scaffoldMessenger.showSnackBar(
+      SnackBar(
+        content: Text(response.messageDetail ?? ''),
+        backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 6),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(8),
+      ),
+    );
 
-    if (response.isSuccessful) {
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      bool anyChanged = false;
-        final verifyProvider = provider;
-
-      for (final guide in guides) {
-        final verifyResponse = await verifyProvider.searchGuide(
-          guide,
-          status: TrackingStateType.receivedInLocalWarehouse,
-        );
-
-        if (verifyResponse.isSuccessful && verifyResponse.content != null) {
-          anyChanged = true;
-          debugPrint('[DEBUG] Guía $guide confirmada en estado ReceivedInLocalWarehouse');
-          break;
-        }
-      }
-
-      if (anyChanged) {
-        widget.onComplete(guides);
-        setState(() => _scannedGuides.clear());
-
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(response.messageDetail ?? ''),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        debugPrint('[DEBUG] Backend dijo exitoso pero las guías no cambiaron de estado');
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(response.messageDetail ?? ''),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+    // Si la operación falló, limpiar las guías escaneadas para desactivar el botón
+    if (!response.isSuccessful) {
+      setState(() => _scannedGuides.clear());
     } else {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(response.messageDetail ?? ''),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      // En éxito, notificar y limpiar
+      widget.onComplete(guides);
+      setState(() => _scannedGuides.clear());
     }
 
     Future.microtask(() {
@@ -190,7 +191,8 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
   }
 
   /// Elimina una guía de la lista
-  void _removeGuide(String guide) => setState(() => _scannedGuides.remove(guide));
+  void _removeGuide(String guide) =>
+      setState(() => _scannedGuides.remove(guide));
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +221,8 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
             autofocus: true,
             decoration: InputDecoration(
               hintText: 'Escanee o ingrese el código de la guía',
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
@@ -227,8 +230,8 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
               ),
             ),
             onChanged: (value) {
-              if (value.endsWith('\\n')) {
-                _handleGuideInput(value.replaceAll('\\n', ''));
+              if (value.endsWith('\n')) {
+                _handleGuideInput(value.replaceAll('\n', ''));
               }
             },
             onSubmitted: _handleGuideInput,

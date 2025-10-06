@@ -13,16 +13,14 @@ class TransportCubeDetails {
     required this.guides,
   });
 
-  factory TransportCubeDetails.fromJson(Map<String, dynamic> json) {
-    // La respuesta viene dentro de content
-    final content = json['content'] as Map<String, dynamic>;
+  factory TransportCubeDetails.fromJson(Map<String, dynamic> content) {
+    // Aquí recibimos directamente el objeto 'content' del API
     return TransportCubeDetails(
       transportCube: TransportCubeInfo.fromJson(
         content['transportCube'] as Map<String, dynamic>,
       ),
       guides: (content['guides'] as List<dynamic>)
-          .map((e) =>
-          GuideTransportCubeInfo.fromJson(e as Map<String, dynamic>))
+          .map((e) => GuideTransportCubeInfo.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

@@ -16,21 +16,30 @@ class VersionService {
     try {
       _packageInfo = await PackageInfo.fromPlatform();
       debugPrint('VersionService initialized: $fullVersion');
+      debugPrint('Version for display: $version');
+      debugPrint('Build number: $buildNumber');
     } catch (e) {
       debugPrint('Error initializing VersionService: $e');
+      // Asegurar valores por defecto en caso de error
+      _packageInfo = PackageInfo(
+        version: '1.0.0',
+        buildNumber: '2',
+        appName: 'GBI Logistics',
+        packageName: 'com.gbi.logistics',
+      );
     }
   }
   
   /// Obtiene la versión completa del app (ej: "1.0.0+1")
   String get fullVersion {
-    if (_packageInfo == null) return '1.0.0+1';
+    if (_packageInfo == null) return '1.0.0+2';
     return '${_packageInfo!.version}+${_packageInfo!.buildNumber}';
   }
   
   /// Obtiene solo la versión (ej: "1.0.0.0")
   String get version {
-    if (_packageInfo == null) return '1.0.0.0';
-    // Convertir de formato 3 números a 4 números usando buildNumber como último dígito
+    if (_packageInfo == null) return '1.0.0.2';
+    // Asegurarnos de que el formato sea correcto para el backend
     return '${_packageInfo!.version}.${_packageInfo!.buildNumber}';
   }
   
@@ -59,7 +68,7 @@ class VersionService {
   
   /// Headers que se envían automáticamente en cada petición HTTP
   Map<String, String> get versionHeaders => {
-    'X-App-Version': originalVersion,
+    'X-App-Version': version,  // Cambio: usar version en lugar de originalVersion
     'X-App-Build': buildNumber,
     'X-App-Platform': platform,
     'X-Client-Type': 'mobile-app',

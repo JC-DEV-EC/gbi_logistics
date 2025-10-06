@@ -3,8 +3,8 @@ import '../../../core/services/http_service.dart';
 import '../../../core/config/api_config.dart';
 import '../../../core/models/api_response.dart';
 import '../models/operation_models.dart';
-import '../models/transport_cube_details.dart';
 import '../models/transport_cube_scan.dart';
+import '../models/transport_cube_details.dart';
 import '../../../core/services/app_logger.dart';
 
 /// Servicio para gestión de cubos de transporte
@@ -31,7 +31,7 @@ class TransportCubeService {
 
     if (!response.isSuccessful) {
       AppLogger.error(
-        'Failed to create transport cube:\n${response.messageDetail ?? response.message}',
+        'Failed to create transport cube:\n${response.messageDetail}',
         source: 'TransportCubeService'
       );
     } else {
@@ -85,7 +85,8 @@ class TransportCubeService {
       ApiEndpoints.getTransportCubeDetails,
       (json) {
         developer.log('Response JSON: $json', name: 'TransportCubeService');
-        return TransportCubeDetails.fromJson(json);
+        final content = json['content'] as Map<String, dynamic>;
+        return TransportCubeDetails.fromJson(content);
       },
       queryParams: {
         'version': ApiConfig.version,
@@ -95,7 +96,7 @@ class TransportCubeService {
     );
 
     if (!response.isSuccessful) {
-      developer.log('Failed to get cube details: ${response.messageDetail ?? response.message}', name: 'TransportCubeService');
+      developer.log('Failed to get cube details: ${response.messageDetail}', name: 'TransportCubeService');
     }
 
     return response;
@@ -119,7 +120,7 @@ class TransportCubeService {
 
     if (!response.isSuccessful) {
       developer.log(
-        'Failed to change cubes state - Error: ${response.messageDetail ?? response.message}',
+        'Failed to change cubes state - Error: ${response.messageDetail}',
         name: 'TransportCubeService',
       );
     } else {
@@ -161,9 +162,43 @@ class TransportCubeService {
 
   Future<ApiResponse<void>> verifyTransportCubeScan(TransportCubeScanRequest request) async {
     return _http.post<void>(
-'${ApiEndpoints.getTransportCubes}/verify-scan',
+      '${ApiEndpoints.getTransportCubes}/verify-scan',
       request.toJson(),
       (_) {},
     );
+  }
+
+  /// Despacha uno o más cubos de transporte a un cliente
+  Future<ApiResponse<GenericOperationResponseGenericResponse>> dispatchCubeToClient(List<int> cubeIds) async {
+    AppLogger.log(
+      'Despachando cubos a cliente:\n- IDs: ${cubeIds.join(", ")}',
+      source: 'TransportCubeService'
+    );
+
+    final request = DispatchedCubeToClientRequest(
+      transportCubeIds: cubeIds,
+    );
+
+    final pathWithVersion = '${ApiEndpoints.dispatchCubeToClient}?version=${ApiConfig.version}';
+    final response = await _http.post<GenericOperationResponseGenericResponse>(
+      pathWithVersion,
+      request.toJson(),
+      (json) => GenericOperationResponseGenericResponse.fromJson(json),
+    );
+
+    if (!response.isSuccessful) {
+      AppLogger.error(
+        'Error al despachar cubos a cliente:\n${response.messageDetail}',
+        source: 'TransportCubeService'
+      );
+    } else {
+      AppLogger.log(
+        'Cubos despachados exitosamente',
+        source: 'TransportCubeService',
+        type: 'SUCCESS'
+      );
+    }
+
+    return response;
   }
 }

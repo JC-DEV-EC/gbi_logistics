@@ -21,10 +21,10 @@ class GuideValidationService {
   }
 
   /// Obtener clientes por subcourier
-  Future<ApiResponse<GetClientBySubcourierResponse>> getClientsBySubcourier() async {
+  Future<ApiResponse<GetClientBySubcourierResponse>> getClientsBySubcourier(int subcourierId) async {
     return _http.get<GetClientBySubcourierResponse>(
-      '${ApiEndpoints.getClientBySubcourier}?version=${ApiConfig.version}',
-      (json) => GetClientBySubcourierResponse.fromJson(json),
+      '${ApiEndpoints.getClientBySubcourier}?version=${ApiConfig.version}&subcourierId=$subcourierId',
+      (json) => GetClientBySubcourierResponse.fromJson(json['content'] as Map<String, dynamic>),
     );
   }
 }

@@ -1,8 +1,8 @@
 /// Respuesta genérica de la API
 class ApiResponse<T> {
   final bool isSuccessful;
-  final String? message;       // Mensaje general
-  final String? messageDetail; // Mensaje detallado (prioridad para mostrar al usuario)
+  final String? message;        // Mensaje de éxito
+  final String? messageDetail; // Mensaje de error detallado
   final T? content;
 
   const ApiResponse({
@@ -14,14 +14,12 @@ class ApiResponse<T> {
 
   /// Crea una respuesta de error
   factory ApiResponse.error({
-    String? message,
     String? messageDetail,
     T? content,
   }) {
     return ApiResponse(
       isSuccessful: false,
-      message: null,  // No usar message para errores, solo messageDetail
-      messageDetail: messageDetail ?? message,  // Si no hay messageDetail, usar message como fallback
+      messageDetail: messageDetail,
       content: content,
     );
   }
@@ -29,14 +27,15 @@ class ApiResponse<T> {
   /// Crea una respuesta exitosa
   factory ApiResponse.success({
     String? message,
-    String? messageDetail,
     T? content,
   }) {
     return ApiResponse(
       isSuccessful: true,
-      message: null,  // No usar message para mensajes de éxito
-      messageDetail: messageDetail ?? message,  // Si no hay messageDetail, usar message como fallback
+      message: message,
       content: content,
     );
   }
+  
+  /// Obtiene el mensaje apropiado según el tipo de respuesta
+  String? get displayMessage => isSuccessful ? message : messageDetail;
 }

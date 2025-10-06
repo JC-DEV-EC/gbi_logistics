@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'features/logistics/models/cube_type.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'core/observers/auth_lifecycle_observer.dart';
 import 'core/config/api_config.dart';
 import 'core/services/http_service.dart';
 import 'core/services/storage_service.dart';
+import 'core/services/version_service.dart';
+import 'core/services/secure_credentials_service.dart';
+import 'core/services/app_update_service.dart';
 import 'features/logistics/providers/auth_provider.dart';
 import 'features/logistics/models/operation_models.dart';
 import 'features/logistics/providers/guide_provider.dart';
@@ -25,14 +29,14 @@ import 'features/logistics/screens/client_dispatch_details_screen.dart';
 import 'features/logistics/screens/new_transport_cube_screen.dart';
 import 'features/logistics/services/guide_details_service.dart';
 import 'features/logistics/screens/guide_scanner_details_screen.dart';
-import 'core/services/version_service.dart';
-import 'core/services/app_update_service.dart';
 import 'features/logistics/services/guide_validation_service.dart';
 import 'features/logistics/providers/guide_validation_provider.dart';
 
-final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
-
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Inicializar servicio de versión antes de renderizar UI
+  await VersionService.instance.initialize();
+  
   // Capturar errores no manejados
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
@@ -78,10 +82,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late final StorageService storageService;
   late final HttpService httpService;
   late final AuthService authService;
+  late final SecureCredentialsService secureCredentialsService;
   late final GuideService guideService;
   late final TransportCubeService transportCubeService;
   late final GuideDetailsService guideDetailsService;
   late final GuideValidationService guideValidationService;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Timer? _tokenRefreshTimer;
   AuthLifecycleObserver? _authObserver;
 
@@ -94,11 +100,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _initializeServices() {
-    // Inicializar servicio de versión
-    VersionService.instance.initialize();
-    
     // Servicios base
     storageService = StorageService();
+    secureCredentialsService = SecureCredentialsService();
     httpService = HttpService(
       baseUrl: ApiConfig.baseUrl,
       onSessionExpired: () {
@@ -108,7 +112,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
     
     // Servicios de negocio
-    authService = AuthService(httpService, storageService);
+    authService = AuthService(httpService, storageService, secureCredentialsService);
     guideService = GuideService(httpService);
     transportCubeService = TransportCubeService(httpService);
     guideDetailsService = GuideDetailsService(httpService);
@@ -122,7 +126,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     
     // Configurar callback de versión
     httpService.versionCheckCallback = (versionResponse) {
-      final context = appNavigatorKey.currentContext;
+      final context = _navigatorKey.currentContext;
       AppUpdateService.instance.handleVersionResponse(context, versionResponse);
     };
     
@@ -170,6 +174,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    // Verificar versión al inicio
+    final versionHeaders = VersionService.instance.versionHeaders;
+    final versionResponse = VersionResponse.fromHeaders(versionHeaders);
+    
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>(
@@ -196,8 +204,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
           useMaterial3: true,
         ),
+        // Manejar la versión requerida antes de cualquier navegación
+        builder: (context, child) {
+          if (versionResponse.updateRequired) {
+            // Mostrar diálogo de actualización forzada
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              AppUpdateService.instance.handleVersionResponse(context, versionResponse);
+            });
+            // Mostrar pantalla en blanco mientras se muestra el diálogo
+            return const Material(
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          return child ?? const SizedBox();
+        },
         initialRoute: '/login',
-        navigatorKey: appNavigatorKey,
+        navigatorKey: _navigatorKey,
         onGenerateRoute: (settings) {
           // Extraer argumentos si existen
           final args = settings.arguments;
@@ -264,6 +288,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         registerDateTime: DateTime.now(),
                         state: 'Created',
                         guides: 0,
+                        type: CubeType.transitToWarehouse,
+                        stateLabel: 'Despachado de Aduana',
                       );
                     },
                   );

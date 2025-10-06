@@ -89,11 +89,18 @@ class _WarehouseReceptionListScreenState
       return 0;
     });
 
-    return ListView.separated(
+return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       itemCount: guides.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      cacheExtent: 200, // Aumentar cache para mejor rendimiento
+      addRepaintBoundaries: true,
       itemBuilder: (context, index) {
+        if (index > 0) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildGuideCard(context, guides[index]),
+          );
+        }
         final guide = guides[index];
         return _buildGuideCard(context, guide);
       },

@@ -1,7 +1,32 @@
 import 'package:flutter/material.dart';
+import '../../../../core/models/api_response.dart';
 
-/// Helper para manejo de errores en UI
-class ErrorHelper {
+/// Helper para manejo de mensajes en UI (éxito y errores)
+class MessageHelper {
+  /// Muestra un mensaje basado en ApiResponse (éxito o error)
+  static void showFromResponse(BuildContext context, ApiResponse response) {
+    if (response.isSuccessful) {
+      showSuccessSnackBar(context, response.message);
+    } else {
+      showErrorSnackBar(context, response.messageDetail);
+    }
+  }
+
+  /// Muestra un mensaje de éxito en SnackBar
+  static void showSuccessSnackBar(BuildContext context, String? message) {
+    if (message?.isEmpty ?? true) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message!),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(8),
+      ),
+    );
+  }
+
   /// Muestra un diálogo de error
   static Future<void> showError(BuildContext context, dynamic error) async {
     String message = '';
@@ -46,7 +71,9 @@ class ErrorHelper {
   static void showErrorSnackBar(BuildContext context, dynamic error) {
     String message = '';
 
-    if (error is Map<String, dynamic>) {
+    if (error is String) {
+      message = error;
+    } else if (error is Map<String, dynamic>) {
       message = error['messageDetail'] ?? '';
       if (message.isEmpty) {
         message = error['message'] ?? '';
@@ -55,10 +82,15 @@ class ErrorHelper {
       message = error.toString();
     }
 
+    if (message.isEmpty) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(8),
       ),
     );
   }
@@ -110,5 +142,30 @@ class ErrorHelper {
         ),
       )),
     );
+  }
+}
+
+/// Alias para mantener compatibilidad con el código existente
+typedef ErrorHelper = MessageHelper;
+
+/// Extension para ApiResponse que facilita mostrar mensajes
+extension ApiResponseMessageExt<T> on ApiResponse<T> {
+  /// Muestra el mensaje apropiado según el tipo de respuesta
+  void showMessage(BuildContext context) {
+    MessageHelper.showFromResponse(context, this);
+  }
+  
+  /// Muestra el mensaje solo si es de éxito
+  void showSuccessMessage(BuildContext context) {
+    if (isSuccessful) {
+      MessageHelper.showSuccessSnackBar(context, message);
+    }
+  }
+  
+  /// Muestra el mensaje solo si es de error
+  void showErrorMessage(BuildContext context) {
+    if (!isSuccessful) {
+      MessageHelper.showErrorSnackBar(context, messageDetail);
+    }
   }
 }

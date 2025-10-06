@@ -9,11 +9,15 @@ import '../../models/validate_guide_models.dart';
 class SubcourierClientSelector extends StatefulWidget {
   final void Function(int?) onSubcourierSelected;
   final void Function(String?) onClientSelected;
+  final bool isLocked;
+  final void Function(bool requiresClient)? onRequiresClientChanged;
 
   const SubcourierClientSelector({
     super.key,
     required this.onSubcourierSelected,
     required this.onClientSelected,
+    this.isLocked = false,
+    this.onRequiresClientChanged,
   });
 
   @override
@@ -56,16 +60,21 @@ class _SubcourierClientSelectorState extends State<SubcourierClientSelector> {
             widget.onClientSelected(null);
             
             // Si el subcourier tiene showClients, cargar los clientes
-            if (subcourier.showClients == true) {
-              validationProvider.loadClients();
+            final requiresClient = subcourier.showClients == true;
+            if (requiresClient) {
+              debugPrint('[SubcourierClientSelector] Loading clients for subcourier ${subcourier.id} (showClients: ${subcourier.showClients})');
+              validationProvider.loadClients(subcourier.id);
             } else {
               validationProvider.clearClients();
             }
+            // Notificar al contenedor si requiere cliente
+            widget.onRequiresClientChanged?.call(requiresClient);
           },
           fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
             return TextFormField(
               controller: controller,
               focusNode: focusNode,
+              enabled: !widget.isLocked,
               decoration: InputDecoration(
                 labelText: 'Subcourier',
                 hintText: 'Seleccione un subcourier',
@@ -115,6 +124,7 @@ class _SubcourierClientSelectorState extends State<SubcourierClientSelector> {
                 return TextFormField(
                   controller: controller,
                   focusNode: focusNode,
+                  enabled: !widget.isLocked,
                   decoration: InputDecoration(
                     labelText: 'Cliente',
                     hintText: 'Seleccione un cliente',

@@ -11,6 +11,7 @@ import '../models/guide_details.dart';
 // Widgets
 import '../widgets/guide_details_scanner.dart';
 import '../presentation/widgets/app_drawer.dart';
+import '../presentation/helpers/error_helper.dart';
 
 class GuideScannerDetailsScreen extends StatefulWidget {
   const GuideScannerDetailsScreen({super.key});
@@ -65,19 +66,9 @@ class _GuideScannerDetailsScreenState extends State<GuideScannerDetailsScreen> {
         debugPrint('- _error: $_error');
       });
 
-      // Mostrar el messageDetail en un SnackBar
+      // Mostrar el mensaje apropiado según el tipo de respuesta
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              response.messageDetail ?? '',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
-                            behavior: SnackBarBehavior.floating,
-                            margin: const EdgeInsets.all(8),
-                          ),
-        );
+        response.showMessage(context);
       }
     } catch (e) {
       debugPrint('[GuideScannerDetailsScreen] Error capturado: $e');

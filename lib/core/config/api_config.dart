@@ -1,12 +1,12 @@
 /// Configuración de la API
 class ApiConfig {
-  /// Tiempo antes de expiración para refrescar el token (15 minutos)
-  static const refreshTokenBeforeExpiry = Duration(minutes: 15);
+  /// Tiempo antes de expiración para refrescar el token (5 minutos)
+  static const refreshTokenBeforeExpiry = Duration(minutes: 5);
 
-  /// Intervalo para verificar el estado del token (5 minutos)
-  static const tokenCheckInterval = Duration(minutes: 5);
+  /// Intervalo para verificar el estado del token (10 minutos)
+  static const tokenCheckInterval = Duration(minutes: 10);
   /// URL base de la API
-  static const String baseUrl = 'https://testapi.gbilogistics.net/internaldev';
+  static const String baseUrl = 'https://internalapi.gbilogistics.net';
 
   /// Versión de la API
   static const String version = '1.0';
@@ -42,6 +42,7 @@ class ApiEndpoints {
   static String get getTransportCubeDetails => ApiConfig.buildUrl('/Guide/get-transport-cube-details');
   static String get changeTransportCubeState => ApiConfig.buildUrl('/Guide/change-transport-cube-state');
   static String get changeCubeGuide => ApiConfig.buildUrl('/Guide/change-cube-guide');
+  static String get dispatchCubeToClient => ApiConfig.buildUrl('/Guide/dispatch-cube-to-client');
   static String get guidesPaginated => ApiConfig.buildUrl('/Guide/guides-paginated');
   static String get validateGuideStatusByProcess => ApiConfig.buildUrl('/Guide/validate-guide-status-by-process');
 

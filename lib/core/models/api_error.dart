@@ -3,9 +3,12 @@ import 'package:flutter/foundation.dart';
 /// Códigos de error de la API
 class ApiErrorCode {
   // Errores de autenticación (1-99)
-  static const int sessionExpired = 60;
-  static const int invalidToken = 61;
-  static const int invalidCredentials = 62;
+  static const int sessionExpired = 1;
+  static const int invalidToken = 2;
+  static const int invalidCredentials = 3;
+  
+  // Errores de estados (60-69)
+  static const int invalidStateForOperation = 60;
 
   // Errores de validación (100-199)
   static const int invalidInput = 100;
@@ -76,7 +79,7 @@ class ApiError implements Exception {
   }
 
   /// Indica si el error es de autenticación
-  bool get isAuthError => code >= 60 && code < 100;
+  bool get isAuthError => code >= 1 && code < 10;
 
   /// Indica si el error es de validación
   bool get isValidationError => code >= 100 && code < 200;

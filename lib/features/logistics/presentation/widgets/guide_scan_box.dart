@@ -99,7 +99,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
               } else {
                 scaffoldMessenger.showSnackBar(
                   SnackBar(
-                    content: Text(response.messageDetail ?? 'La guía ya está validada'),
+                    content: Text(response.messageDetail ?? ''),
                     backgroundColor: Colors.blue,
                   ),
                 );
@@ -112,7 +112,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
               if (!mounted) return;
               scaffoldMessenger.showSnackBar(
                 SnackBar(
-                  content: Text(response.messageDetail ?? 'La guía está en otro estado'),
+                  content: Text(response.messageDetail ?? ''),
                   backgroundColor: Colors.orange,
                   duration: const Duration(seconds: 3),
                 ),
@@ -125,7 +125,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
             if (!mounted) return;
             scaffoldMessenger.showSnackBar(
               SnackBar(
-                content: Text(response.messageDetail ?? 'No se encontró la guía'),
+                content: Text(response.messageDetail ?? ''),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 3),
               ),
@@ -149,12 +149,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
       } catch (_) {
         if (mounted) {
           await AppSounds.error();
-          scaffoldMessenger.showSnackBar(
-            const SnackBar(
-              content: Text('Error al procesar la guía'),
-              backgroundColor: Colors.red,
-            ),
-          );
+          // No mostrar mensajes locales; el backend debe proveer messageDetail
         }
       } finally {
         _controller.clear();

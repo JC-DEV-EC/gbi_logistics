@@ -10,12 +10,14 @@ class GuideValidationScanBox extends StatefulWidget {
   final int? selectedSubcourierId;
   final String? selectedClientId;
   final void Function(String) onGuideValidated;
+  final bool requiresClient;
 
   const GuideValidationScanBox({
     super.key,
     this.selectedSubcourierId,
     this.selectedClientId,
     required this.onGuideValidated,
+    this.requiresClient = false,
   });
 
   @override
@@ -66,31 +68,39 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
 
       if (!mounted) return;
 
+      // El provider retorna ApiResponse<void>, por lo que no hay content. Usar solo el flag de éxito del backend
+      final isValid = response.isSuccessful;
+
       // Reproducir sonido según resultado
-      if (response.isSuccessful) {
+      if (isValid) {
         SystemSound.play(SystemSoundType.click);
         widget.onGuideValidated(cleanGuide);
       } else {
-        await SystemSound.play(SystemSoundType.alert);
+        SystemSound.play(SystemSoundType.alert);
+        HapticFeedback.heavyImpact();
       }
 
-      // Limpiar input
-      _controller.clear();
-      
       // Mostrar mensaje del backend
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            response.messageDetail ?? '',
+            isValid 
+                ? (response.message ?? '')
+                : (response.messageDetail ?? ''),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w500,
             ),
           ),
-          backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
-          duration: Duration(seconds: response.isSuccessful ? 3 : 6),
+          backgroundColor: isValid ? Colors.green : Colors.red,
+          duration: Duration(seconds: isValid ? 3 : 6),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(8),
         ),
       );
+
+      // Limpiar input
+      _controller.clear();
     });
   }
 
@@ -116,8 +126,14 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
         controller: _controller,
         focusNode: _focusNode,
         autofocus: true,
+        enabled: widget.selectedSubcourierId != null && 
+                (!widget.requiresClient || widget.selectedClientId != null),
         decoration: InputDecoration(
-          hintText: 'Escanee o ingrese el código de la guía',
+          hintText: widget.selectedSubcourierId == null
+              ? 'Seleccione un subcourier para habilitar el escaneo'
+              : (widget.requiresClient && widget.selectedClientId == null
+                  ? 'Seleccione un cliente para continuar'
+                  : 'Escanee o ingrese el código de la guía'),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 12,
@@ -125,7 +141,9 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
           border: InputBorder.none,
           suffixIcon: Icon(
             Icons.qr_code_scanner,
-            color: theme.colorScheme.primary.withValues(alpha: 128),
+            color: widget.selectedSubcourierId != null
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline,
           ),
         ),
         onChanged: (value) {

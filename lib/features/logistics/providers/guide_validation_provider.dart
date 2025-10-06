@@ -49,7 +49,12 @@ class GuideValidationProvider extends ChangeNotifier {
         );
       }
       
-      return response;
+      // Retornar respuesta exitosa preservando el campo message
+      return ApiResponse(
+        isSuccessful: true,
+        message: response.message,
+        messageDetail: response.messageDetail,
+      );
     } catch (e) {
       _error = e.toString();
       return ApiResponse(
@@ -63,18 +68,22 @@ class GuideValidationProvider extends ChangeNotifier {
   }
 
   /// Cargar clientes para un subcourier
-  Future<void> loadClients() async {
+  Future<void> loadClients(int subcourierId) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _service.getClientsBySubcourier();
+      debugPrint('[GuideValidationProvider] Requesting clients for subcourier $subcourierId');
+      final response = await _service.getClientsBySubcourier(subcourierId);
+      debugPrint('[GuideValidationProvider] Response: success=${response.isSuccessful}, content=${response.content != null}, clients=${response.content?.clients?.length ?? 0}');
       
       if (response.isSuccessful && response.content != null) {
         _clients = response.content!.clients ?? [];
+        debugPrint('[GuideValidationProvider] Clients loaded: ${_clients.length}');
       } else {
         _error = response.messageDetail;
+        debugPrint('[GuideValidationProvider] Error loading clients: $_error');
       }
     } catch (e) {
       _error = e.toString();

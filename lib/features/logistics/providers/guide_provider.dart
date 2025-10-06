@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/services/app_logger.dart';
+
 import '../../../core/models/api_response.dart';
-import '../services/guide_service.dart';
+import '../../../core/services/app_logger.dart';
 import '../models/operation_models.dart';
+import '../services/guide_service.dart';
 
 /// Provider para manejar operaciones con guías y sus estados.
-/// 
+///
 /// Proporciona funcionalidades para:
 /// - Cargar y buscar guías por estado
 /// - Gestionar estados de UI (validadas/despachadas)
@@ -21,7 +22,8 @@ class GuideProvider extends ChangeNotifier {
 
   // Estado interno
   bool _isLoading = false;
-  String? _error;
+  final ValueNotifier<String?> _errorNotifier = ValueNotifier<String?>(null);
+  bool _lastOperationSuccessful = false;
   List<GuideInfo> _guides = [];
   int _totalGuides = 0;
   final Map<String, String> _guideUiStates = {};
@@ -38,7 +40,9 @@ class GuideProvider extends ChangeNotifier {
 
   // Getters
   bool get isLoading => _isLoading;
-  String? get error => _error;
+  String? get error => _errorNotifier.value;
+  ValueNotifier<String?> get errorNotifier => _errorNotifier;
+  bool get lastOperationSuccessful => _lastOperationSuccessful;
   List<GuideInfo> get guides => _guides;
   int get totalGuides => _totalGuides;
   Map<String, String> get guideUiStates => _guideUiStates;
@@ -52,7 +56,9 @@ class GuideProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -----------------------------
   // Métodos de persistencia
+  // -----------------------------
   Future<void> _loadSavedStates() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -70,9 +76,9 @@ class GuideProvider extends ChangeNotifier {
 
       AppLogger.log(
         'Estados cargados:\n'
-        '- Validadas (${validatedGuides.length}): ${validatedGuides.join(", ")}\n'
-        '- Despachadas (${dispatchedGuides.length}): ${dispatchedGuides.join(", ")}',
-        source: 'GuideProvider'
+            '- Validadas (${validatedGuides.length}): ${validatedGuides.join(", ")}\n'
+            '- Despachadas (${dispatchedGuides.length}): ${dispatchedGuides.join(", ")}',
+        source: 'GuideProvider',
       );
 
       notifyListeners();
@@ -81,7 +87,9 @@ class GuideProvider extends ChangeNotifier {
     }
   }
 
+  // -----------------------------
   // Métodos de búsqueda y carga
+  // -----------------------------
   Future<void> loadGuides({
     required int page,
     required int pageSize,
@@ -90,14 +98,15 @@ class GuideProvider extends ChangeNotifier {
     bool hideValidated = false,
     bool bypassLoadingGuard = false,
   }) async {
-    try {
+try {
       if (_isLoading && !bypassLoadingGuard) {
         AppLogger.log('Omitiendo carga: ya hay una en proceso', source: 'GuideProvider');
         return;
       }
-      
+
       _isLoading = true;
-      _error = null;
+      _errorNotifier.value = null;
+      _lastOperationSuccessful = false;
       notifyListeners();
 
       final response = await _guideService.getGuidesPaginated(
@@ -109,41 +118,38 @@ class GuideProvider extends ChangeNotifier {
 
       if (response.isSuccessful && response.content != null) {
         _guides = response.content!.registers;
-        
+
         if (hideValidated) {
-          _guides = _guides
-              .where((guide) => 
-                // Filtrar guías ya validadas/despachadas
-                (!_guideUiStates.containsKey(guide.code) || 
-                (_guideUiStates[guide.code] != 'validated' && 
-                 _guideUiStates[guide.code] != 'dispatched')))
-              .toList();
+          _guides = _guides.where((guide) {
+            final state = _guideUiStates[guide.code];
+            return state != 'validated' && state != 'dispatched';
+          }).toList();
         }
 
-        // Ordenar la lista para tener primero las guías DispatchedFromCustomsWithOutCube
+        // Ordenar para priorizar DispatchedFromCustomsWithOutCube
         _guides.sort((a, b) {
-          if (a.stateLabel == 'DispatchedFromCustomsWithOutCube' && b.stateLabel != 'DispatchedFromCustomsWithOutCube') {
+          if (a.stateLabel == 'DispatchedFromCustomsWithOutCube' &&
+              b.stateLabel != 'DispatchedFromCustomsWithOutCube') {
             return -1;
-          } else if (a.stateLabel != 'DispatchedFromCustomsWithOutCube' && b.stateLabel == 'DispatchedFromCustomsWithOutCube') {
+          } else if (a.stateLabel != 'DispatchedFromCustomsWithOutCube' &&
+              b.stateLabel == 'DispatchedFromCustomsWithOutCube') {
             return 1;
           }
           return 0;
         });
 
         _totalGuides = response.content!.totalRegister;
-        _error = null;
       } else {
-        _error = response.message;
+      _errorNotifier.value = response.messageDetail;
       }
     } catch (e) {
-      _error = e.toString();
+      _errorNotifier.value = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Busca guías según parámetros sin actualizar estado
   Future<List<GuideInfo>> searchGuides({
     required int page,
     required int pageSize,
@@ -157,7 +163,7 @@ class GuideProvider extends ChangeNotifier {
         status: status,
         guideCode: guideCode,
       );
-      
+
       if (resp.isSuccessful && resp.content != null) {
         return resp.content!.registers;
       }
@@ -168,101 +174,83 @@ class GuideProvider extends ChangeNotifier {
     }
   }
 
-  /// Busca una guía por código exacto, filtrando por estado en el servidor.
-  /// Nota: el backend devuelve solo 'stateLabel' (etiqueta) en los listados,
-  /// por lo que NO debemos comparar contra el código de estado (en inglés).
-  /// Además, la búsqueda es paginada; si hay más resultados que el tamaño
-  /// de página, iteramos páginas hasta encontrar coincidencia (con límite).
-  Future<ApiResponse<GuideInfo>> searchGuide(String code, {required String status}) async {
+  Future<ApiResponse<GuideInfo>> searchGuide(
+      String code, {
+        required String status,
+      }) async {
     try {
       AppLogger.log(
         'Buscando guía $code con estado $status',
-        source: 'GuideProvider'
+        source: 'GuideProvider',
       );
 
-      const pageSize = 50; // buscar en bloques de 50
-      int page = 1;
-      int fetched = 0;
-      int total = 0;
-      const int maxPages = 5; // seguridad para no abusar del backend
-
-      while (page <= maxPages) {
-        final resp = await _guideService.getGuidesPaginated(
-          page: page,
-          pageSize: pageSize,
-          status: status,
-          guideCode: code,
-        );
-
-        if (!resp.isSuccessful || resp.content == null) {
-          return ApiResponse.error(
-            messageDetail: resp.messageDetail ?? ''
-          );
-        }
-
-        total = resp.content!.totalRegister;
-        fetched += resp.content!.registers.length;
-
-        // Buscar coincidencia exacta solo por código, el estado ya lo filtró el backend
-        final match = resp.content!.registers
-            .where((g) => (g.code ?? '').toLowerCase() == code.toLowerCase())
-            .firstOrNull;
-        if (match != null) {
-          AppLogger.log(
-            'Guía $code encontrada (stateLabel=${match.stateLabel}) en página $page de ${((total + pageSize - 1) / pageSize).ceil()}',
-            source: 'GuideProvider'
-          );
-          return ApiResponse(
-            isSuccessful: true,
-            message: resp.message,
-            messageDetail: resp.messageDetail,
-            content: match
-          );
-        }
-
-        // Si ya cubrimos todos los resultados potenciales, salir
-        if (fetched >= total || resp.content!.registers.isEmpty) {
-          break;
-        }
-        page += 1;
-      }
+      // Consultar al backend filtrando por estado y código exacto
+      final resp = await _guideService.getGuidesPaginated(
+        page: 1,
+        pageSize: 50,
+        status: status,
+        guideCode: code,
+      );
 
       AppLogger.log(
-        'Guía $code no encontrada con estado filtrado $status (total=$total, revisadas=$fetched)',
+        'Response for guide $code:\n- Success: ${resp.isSuccessful}\n- MessageDetail: ${resp.messageDetail}\n- Has content: ${resp.content != null}',
         source: 'GuideProvider'
       );
-      return ApiResponse.error(
-        messageDetail: null // Backend should provide error message
-      );
 
+      // Si la respuesta no es exitosa o no hay contenido, devolver el messageDetail del backend
+      if (!resp.isSuccessful || resp.content == null) {
+        return ApiResponse.error(messageDetail: resp.messageDetail);
+      }
+
+      // Si no hay registros, usar el messageDetail del backend
+      if (resp.content!.registers.isEmpty) {
+        return ApiResponse.error(messageDetail: resp.messageDetail);
+      }
+
+      // Buscar coincidencia exacta por código (ignorando mayúsculas/minúsculas)
+      final match = resp.content!.registers
+          .where((g) => (g.code ?? '').toLowerCase() == code.toLowerCase())
+          .firstOrNull;
+
+      if (match == null) {
+        return ApiResponse.error(messageDetail: resp.messageDetail);
+      }
+
+      // Retornar la guía encontrada con el message del backend para éxito
+      return ApiResponse.success(
+        message: resp.message,
+        content: match,
+      );
     } catch (e) {
       AppLogger.error('Error buscando guía', error: e, source: 'GuideProvider');
       return ApiResponse.error(
-        messageDetail: null // Backend should provide error message
+        messageDetail: null, // Dejar que el backend proporcione el mensaje en la siguiente interacción
       );
     }
   }
 
+  // -----------------------------
   // Métodos de despacho
-  /// Despacha guías a cliente y actualiza la UI
-  Future<ApiResponse<void>> dispatchToClient(DispatchGuideToClientRequest request) async {
+  // -----------------------------
+  Future<ApiResponse<void>> dispatchToClient(
+      DispatchGuideToClientRequest request,
+      ) async {
     try {
       _isLoading = true;
-      _error = null;
+      _errorNotifier.value = null;
+      _lastOperationSuccessful = false;
       notifyListeners();
 
-      // Llamar directamente al endpoint dispatch-to-client
       final response = await _guideService.dispatchToClient(request);
 
-      if (response.isSuccessful) {
-        // Limpiar los estados, selecciones y el subcourier seleccionado
+if (response.isSuccessful) {
+        _lastOperationSuccessful = true;
         for (final guide in request.guides) {
           _guideUiStates.remove(guide);
           _selectedGuides.remove(guide);
         }
-        _selectedSubcourierId = null;  // Limpiar subcourier seleccionado
-        
-        // Recargar la lista
+        _selectedSubcourierId = null;
+
         await loadGuides(
           page: 1,
           pageSize: 50,
@@ -270,29 +258,35 @@ class GuideProvider extends ChangeNotifier {
           hideValidated: false,
           bypassLoadingGuard: true,
         );
-      } else if (response.message?.contains('sesión ha expirado') ?? false) {
+      } else if (response.messageDetail?.contains('sesión ha expirado') ?? false) {
         _guides.clear();
         _guideUiStates.clear();
         _selectedGuides.clear();
-        _error = response.message;
+        _errorNotifier.value = response.messageDetail;
       }
 
       return response;
     } catch (e) {
-      _error = e.toString();
-      return ApiResponse<UpdateGuideStatusResponse>.error(message: e.toString());
+      _errorNotifier.value = e.toString();
+      return ApiResponse.error(
+        messageDetail: _errorNotifier.value,
+      );
     } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 
+  // -----------------------------
   // Métodos de estado UI
+  // -----------------------------
   Future<void> updateGuideUiState(String guideCode, String state) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final validatedGuides = Set<String>.from(prefs.getStringList(_validatedGuidesKey) ?? []);
-      final dispatchedGuides = Set<String>.from(prefs.getStringList(_dispatchedGuidesKey) ?? []);
+      final validatedGuides = Set<String>.from(
+        prefs.getStringList(_validatedGuidesKey) ?? [],
+      );
+      final dispatchedGuides = Set<String>.from(
+        prefs.getStringList(_dispatchedGuidesKey) ?? [],
+      );
 
       _guideUiStates[guideCode] = state;
 
@@ -304,13 +298,19 @@ class GuideProvider extends ChangeNotifier {
         validatedGuides.remove(guideCode);
       }
 
-      await prefs.setStringList(_validatedGuidesKey, validatedGuides.toList());
-      await prefs.setStringList(_dispatchedGuidesKey, dispatchedGuides.toList());
+      await prefs.setStringList(
+        _validatedGuidesKey,
+        validatedGuides.toList(),
+      );
+      await prefs.setStringList(
+        _dispatchedGuidesKey,
+        dispatchedGuides.toList(),
+      );
 
       AppLogger.log(
-        'Estado actualizado para guía $guideCode: $state\n' 
-        'Estados: ${validatedGuides.length} validadas, ${dispatchedGuides.length} despachadas',
-        source: 'GuideProvider'
+        'Estado actualizado para guía $guideCode: $state\n'
+            'Estados: ${validatedGuides.length} validadas, ${dispatchedGuides.length} despachadas',
+        source: 'GuideProvider',
       );
 
       notifyListeners();
@@ -331,7 +331,9 @@ class GuideProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -----------------------------
   // Métodos de selección
+  // -----------------------------
   void toggleGuideSelection(String code) {
     if (_selectedGuides.contains(code)) {
       _selectedGuides.remove(code);
@@ -350,7 +352,9 @@ class GuideProvider extends ChangeNotifier {
     }
   }
 
-  /// Actualiza el filtro de estado para Despacho a Cliente
+  // -----------------------------
+  // Métodos auxiliares
+  // -----------------------------
   void setClientDispatchFilterState(String state) {
     if (_clientDispatchFilterState != state) {
       _clientDispatchFilterState = state;
@@ -358,35 +362,42 @@ class GuideProvider extends ChangeNotifier {
     }
   }
 
-  // Métodos de gestión de errores
-  void clearError() {
-    _error = null;
+  void clearLastOperationStatus() {
+    _lastOperationSuccessful = false;
     notifyListeners();
   }
 
-  // Métodos de gestión directa de guías
+  void clearError() {
+    _errorNotifier.value = null;
+    notifyListeners();
+  }
+
   void setGuides(List<GuideInfo> guides) {
     _guides = guides;
     notifyListeners();
   }
 
-  /// Actualiza el estado de una guía en el backend
-  Future<ApiResponse<void>> updateGuideStatus(UpdateGuideStatusRequest request) async {
+  Future<ApiResponse<void>> updateGuideStatus(
+      UpdateGuideStatusRequest request,
+      ) async {
     try {
       _isLoading = true;
-      _error = null;
+      _errorNotifier.value = null;
+      _lastOperationSuccessful = false;
       notifyListeners();
 
       final response = await _guideService.updateGuideStatus(request);
-      
+
       if (!response.isSuccessful) {
-        _error = response.messageDetail;
+        _errorNotifier.value = response.messageDetail;
       }
 
       return response;
     } catch (e) {
-      _error = e.toString();
-      return ApiResponse.error(messageDetail: null); // Backend should provide error message
+      _errorNotifier.value = e.toString();
+      return ApiResponse.error(
+        messageDetail: _errorNotifier.value,
+      );
     } finally {
       _isLoading = false;
       notifyListeners();

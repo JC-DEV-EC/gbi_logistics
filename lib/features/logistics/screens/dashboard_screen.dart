@@ -61,10 +61,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             right: 0,
             child: Center(
               child: Text(
-                'v${VersionService.instance.version}',
+                'v${VersionService.instance.originalVersion}.${VersionService.instance.buildNumber}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.grey[500],
-                  fontSize: 11,
+                  fontSize: 18,
                 ),
               ),
             ),

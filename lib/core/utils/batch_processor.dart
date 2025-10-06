@@ -44,7 +44,7 @@ class BatchProcessor {
         } else {
           // Si falla el lote completo
           for (final item in items) {
-            failedItems[item] = response.messageDetail ?? response.message ?? 'Error desconocido';
+            failedItems[item] = response.messageDetail ?? 'Error desconocido';
           }
         }
       } catch (e) {
@@ -74,7 +74,7 @@ class BatchProcessor {
         } else {
           // Si falla el lote completo
           for (final item in batch) {
-            failedItems[item] = response.messageDetail ?? response.message ?? 'Error desconocido';
+            failedItems[item] = response.messageDetail ?? 'Error desconocido';
           }
           if (stopOnError) break;
         }
@@ -112,7 +112,7 @@ class BatchProcessor {
         if (response.isSuccessful) {
           processedItems.add(item);
         } else {
-          failedItems[item] = response.messageDetail ?? response.message ?? 'Error desconocido';
+          failedItems[item] = response.messageDetail ?? 'Error desconocido';
           if (stopOnError) break;
         }
       } catch (e) {

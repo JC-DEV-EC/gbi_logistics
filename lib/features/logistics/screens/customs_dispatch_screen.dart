@@ -11,9 +11,11 @@ import '../models/operation_models.dart';
 
 // Models
 import '../models/transport_cube_state.dart';
+import '../models/cube_type.dart';
 
 // Presentation - constants, helpers & widgets
 import '../presentation/constants/visual_states.dart';
+import '../presentation/helpers/error_helper.dart';
 import '../presentation/widgets/app_drawer.dart';
 import '../presentation/widgets/customs_dispatch_scan_box.dart';
 
@@ -30,47 +32,6 @@ class CustomsDispatchScreen extends StatefulWidget {
 }
 
 class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
-  Future<void> _createNewCube(List<String> guides) async {
-    final provider = context.read<TransportCubeProvider>();
-    final authProvider = context.read<AuthProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      // Refrescar token primero
-      final refreshed = await authProvider.ensureFreshToken();
-      developer.log(
-        'Token refresh before create cube - Refreshed/Valid: $refreshed',
-        name: 'CustomsDispatchScreen',
-      );
-
-      // Crear el cubo con las guías (el backend maneja los estados)
-      final response = await provider.createTransportCube(guides);
-      if (!mounted) return;
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            response.messageDetail ?? '',
-          ),
-          backgroundColor: response.isSuccessful ? Colors.green : Colors.red,
-        ),
-      );
-
-      // Si fue exitoso, recargar la lista de cubos (forzado)
-      if (response.isSuccessful) {
-        await provider.loadCubes(force: true);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(''),  // Let backend provide error message
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -79,7 +40,6 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       name: 'CustomsDispatchScreen',
     );
 
-    // Usar addPostFrameCallback para evitar setState durante build
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       developer.log(
         'CustomsDispatchScreen - Starting initial load',
@@ -99,6 +59,40 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
     });
   }
 
+  Future<void> _createNewCube(List<String> guides) async {
+    final provider = context.read<TransportCubeProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final refreshed = await authProvider.ensureFreshToken();
+      developer.log(
+        'Token refresh before create cube - Refreshed/Valid: $refreshed',
+        name: 'CustomsDispatchScreen',
+      );
+
+      final response = await provider.createTransportCube(
+        guides,
+        CubeType.transitToWarehouse,
+      );
+      if (!mounted) return;
+
+      response.showMessage(context);
+
+      if (response.isSuccessful) {
+        await provider.loadCubes(force: true);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(''),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TransportCubeProvider>();
@@ -114,68 +108,74 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       appBar: AppBar(
         title: const Text('Despacho en Aduana'),
         actions: [
-          if (hasSelectedCubes) ...[            
-            TextButton.icon(
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                
-                // Enviar cubos seleccionados a estado Tránsito en Bodega (Sent)
-                final resp = await provider.changeSelectedCubesState(
-                  TransportCubeState.sent,
-                );
-                if (!mounted) return;
+          if (hasSelectedCubes) ...[
+            // Botón de Tránsito
+            if (provider.selectedCubes.every(
+                  (cubeId) => provider.cubes
+                  .firstWhere((c) => c.id == cubeId)
+                  .type == CubeType.transitToWarehouse,
+            )) ...[
+              TextButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final resp = await provider.changeSelectedCubesState(
+                    TransportCubeState.sent,
+                  );
+                  if (!mounted) return;
 
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      resp.messageDetail ?? '',
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(resp.isSuccessful 
+                          ? (resp.message ?? 'Operación exitosa')
+                          : (resp.messageDetail ?? 'Error en la operación')),
+                      backgroundColor: resp.isSuccessful ? Colors.green : Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.all(8),
                     ),
-                    backgroundColor:
-                    resp.isSuccessful ? Colors.green : Colors.red,
-                  ),
-                );
+                  );
 
-                if (resp.isSuccessful) {
-                  // Recargar listado actualizado y limpiar selección
-                  await provider.loadCubes(force: true);
-                }
-              },
-              icon: const Icon(Icons.local_shipping),
-              label: Text(
-                'Tránsito (${provider.selectedCubeIds.length})',
+                  if (resp.isSuccessful) {
+                    await provider.loadCubes(force: true);
+                  }
+                },
+                icon: const Icon(Icons.local_shipping),
+                label: Text(
+                  'Tránsito (${provider.selectedCubeIds.length})',
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                
-                // Enviar cubos seleccionados a estado Despacho a Cliente (Downloaded)
-                final resp = await provider.changeSelectedCubesState(
-                  TransportCubeState.downloaded,
-                );
-                if (!mounted) return;
+              const SizedBox(width: 8),
+            ],
 
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      resp.messageDetail ?? '',
+            // Botón de Despacho
+            if (provider.selectedCubes.every((cubeId) {
+              final cubeType =
+                  provider.cubes.firstWhere((c) => c.id == cubeId).type;
+              return cubeType == CubeType.toDispatchToSubcourier ||
+                  cubeType == CubeType.toDispatchToClient;
+            })) ...[
+              TextButton.icon(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final resp = await provider.dispatchSelectedCubesToClient();
+                  if (!mounted) return;
+
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(resp.isSuccessful 
+                          ? (resp.message ?? 'Despacho completado exitosamente')
+                          : (resp.messageDetail ?? 'Error en el despacho')),
+                      backgroundColor: resp.isSuccessful ? Colors.green : Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.all(8),
                     ),
-                    backgroundColor:
-                    resp.isSuccessful ? Colors.green : Colors.red,
-                  ),
-                );
-
-                if (resp.isSuccessful) {
-                  // Recargar listado actualizado y limpiar selección
-                  await provider.loadCubes(force: true);
-                }
-              },
-              icon: const Icon(Icons.home_outlined),
-              label: Text(
-                'Despacho (${provider.selectedCubeIds.length})',
+                  );
+                },
+                icon: const Icon(Icons.home_outlined),
+                label: Text(
+                  'Despacho (${provider.selectedCubeIds.length})',
+                ),
               ),
-            ),
+            ],
           ],
         ],
       ),
@@ -221,7 +221,9 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
       context: context,
       builder: (confirmCtx) => AlertDialog(
         title: const Text('¿Cerrar ventana?'),
-        content: const Text('¿Está seguro que desea cerrar esta ventana? Se perderán las guías escaneadas.'),
+        content: const Text(
+          '¿Está seguro que desea cerrar esta ventana? Se perderán las guías escaneadas.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(confirmCtx, false),
@@ -238,12 +240,11 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
   }
 
   Future<void> _showCustomsDispatchDialog() async {
-    // Guardar el context padre (de la pantalla) para usarlo después del pop
     final parentContext = context;
 
     await showDialog<void>(
       context: parentContext,
-      barrierDismissible: false, // No cerrar al tocar fuera del diálogo
+      barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -265,47 +266,22 @@ class _CustomsDispatchScreenState extends State<CustomsDispatchScreen> {
           width: MediaQuery.of(parentContext).size.width * 0.8,
           child: CustomsDispatchScanBox(
             onComplete: (guides, createCube) async {
-              // Cerrar el diálogo usando su propio context
               Navigator.pop(dialogCtx);
 
               if (createCube) {
-                // Lógica de creación de cubo (mantiene su comportamiento original)
                 _createNewCube(guides);
               } else {
-                // Solo actualizar estado de las guías a DispatchedFromCustoms
-                // sin ninguna relación con cubos
                 final guideProvider = parentContext.read<GuideProvider>();
-                final messenger = ScaffoldMessenger.of(parentContext);
+
                 final request = UpdateGuideStatusRequest(
                   guides: guides,
                   newStatus: TrackingStateType.dispatchedFromCustoms,
                 );
-                final resp = await guideProvider.updateGuideStatus(request);
 
+                final resp = await guideProvider.updateGuideStatus(request);
                 if (!mounted) return;
 
-                // Siempre mostrar el messageDetail del servidor si existe
-                final serverMessage = resp.messageDetail ?? resp.message ?? '';
-
-                // Determinar color basado en la respuesta
-                final Color feedbackColor = !resp.isSuccessful
-                    ? Colors.red
-                    : Colors.green;
-
-                // Use only server's messageDetail
-                String feedbackMessage = resp.messageDetail ?? '';
-
-                // Mostrar feedback usando el ScaffoldMessenger capturado
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(feedbackMessage),
-                    backgroundColor: feedbackColor,
-                    // Dar más tiempo si hay mensaje detallado del servidor
-                    duration: serverMessage.isNotEmpty
-                        ? const Duration(seconds: 10)
-                        : const Duration(seconds: 4),
-                  ),
-                );
+                resp.showMessage(context);
               }
             },
           ),

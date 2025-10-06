@@ -1,5 +1,6 @@
 import '../../../core/services/http_service.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/secure_credentials_service.dart';
 import '../../../core/config/api_config.dart';
 import '../../../core/models/api_response.dart';
 import '../models/auth_models.dart';
@@ -8,8 +9,9 @@ import '../models/auth_models.dart';
 class AuthService {
   final HttpService _http;
   final StorageService _storage;
+  final SecureCredentialsService _secureStorage;
 
-  AuthService(this._http, this._storage) {
+  AuthService(this._http, this._storage, this._secureStorage) {
     _restoreToken();
   }
 
@@ -89,35 +91,62 @@ class AuthService {
   }
   /// Intenta refrescar el token
   Future<bool> refreshTokenIfNeeded() async {
-    // Verificar si tenemos token y su expiración en storage
-    final tokenData = await _storage.getTokenData(); // Debe devolver { token, expiresAt }
-    if (tokenData == null) return false;
+    try {
+      // Verificar si hay sesión activa
+      final hasSession = await _storage.hasActiveSession();
+      if (!hasSession) return false;
 
-    final expiresAt = tokenData.expiresAt;
-    final now = DateTime.now();
+      // Verificar si tenemos token y su expiración en storage
+      final tokenData = await _storage.getTokenData();
+      if (tokenData == null) return false;
 
-    // Si falta suficiente tiempo, no refrescar
-    if (expiresAt.difference(now) > ApiConfig.refreshTokenBeforeExpiry) {
-      return true;
+      final expiresAt = tokenData.expiresAt;
+      final now = DateTime.now();
+
+      // Si falta suficiente tiempo, no refrescar
+      if (expiresAt.difference(now) > ApiConfig.refreshTokenBeforeExpiry) {
+        return true;
+      }
+
+      // Intentar primero login silencioso con credenciales guardadas
+      final saved = await _secureStorage.getCredentials();
+      final username = saved['username'];
+      final password = saved['password'];
+      
+      if (username != null && password != null) {
+        final loginRequest = LoginRequest(username: username, password: password);
+        final loginResponse = await login(loginRequest);
+        if (loginResponse.isSuccessful) {
+          return true;
+        }
+      }
+
+      // Si el login silencioso falla, intentar refresh token
+      final response = await _http.post<LoginResponse>(
+        ApiEndpoints.refreshToken,
+        {
+          'token': tokenData.token,
+        },
+        (json) => LoginResponse.fromJson(json),
+        suppressAuthHandling: true,
+      );
+
+      if (response.isSuccessful && response.content?.token != null) {
+        final newToken = response.content!.token!;
+        _http.setToken(newToken);
+        await _storage.setToken(newToken);
+        
+        // Actualizar también los datos de login si están disponibles
+        if (response.content != null) {
+          await _storage.setLoginData(response.content!.toJson());
+        }
+        
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      return false;
     }
-
-    // Llamar al endpoint de refresh
-    final response = await _http.post<LoginResponse>(
-      ApiEndpoints.refreshToken,
-      {
-        'token': tokenData.token,
-      },
-      (json) => LoginResponse.fromJson(json),
-      suppressAuthHandling: true,
-    );
-
-    if (response.isSuccessful && response.content?.token != null) {
-      final newToken = response.content!.token!;
-      _http.setToken(newToken);
-      await _storage.setToken(newToken);
-      return true;
-    }
-
-    return false;
   }
 }

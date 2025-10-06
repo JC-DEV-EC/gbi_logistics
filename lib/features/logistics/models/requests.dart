@@ -1,13 +1,18 @@
+import 'cube_type.dart';
+
 /// Request para crear un nuevo cubo de transporte
 class NewTransportCubeRequest {
   final List<String> guides;
+  final CubeType type;
 
   const NewTransportCubeRequest({
     required this.guides,
+    required this.type,
   });
 
   Map<String, dynamic> toJson() => {
     'guides': guides,
+    'type': type.toString(),
   };
 }
 

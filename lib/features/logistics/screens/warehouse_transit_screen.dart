@@ -140,7 +140,6 @@ class WarehouseTransitScreen extends StatelessWidget {
             SnackBar(
               content: Text(
                 guidesUpdate.messageDetail ??
-                    guidesUpdate.message ??
                     'Error actualizando guías a Tránsito',
               ),
               backgroundColor: Colors.red,
@@ -153,12 +152,13 @@ class WarehouseTransitScreen extends StatelessWidget {
           scaffoldMessenger.showSnackBar(
             SnackBar(
               content: Text(
-                guidesUpdate.messageDetail ??
-                    guidesUpdate.message ??
+                guidesUpdate.message ??
                     'Guías actualizadas a Tránsito',
               ),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(8),
             ),
           );
         }
@@ -183,12 +183,13 @@ class WarehouseTransitScreen extends StatelessWidget {
         scaffoldMessenger.showSnackBar(
           SnackBar(
             content: Text(
-              response.messageDetail ??
-                  response.message ??
+              response.message ??
                   '$cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
             ),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(8),
           ),
         );
       } else {
@@ -196,7 +197,6 @@ class WarehouseTransitScreen extends StatelessWidget {
           SnackBar(
             content: Text(
               response.messageDetail ??
-                  response.message ??
                   'Error al cambiar estado de cubos a Sent',
             ),
             backgroundColor: Colors.red,

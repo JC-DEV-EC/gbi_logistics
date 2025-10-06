@@ -347,7 +347,7 @@ class _ClientDispatchDetailsScreenState
       AppLogger.log(
         'Respuesta del despacho:\n'
         '- Exitoso: ${response.isSuccessful}\n'
-        '- Mensaje: ${response.messageDetail ?? response.message}',
+        '- Mensaje: ${response.messageDetail}',
         source: 'ClientDispatchDetailsScreen'
       );
 
@@ -379,7 +379,7 @@ class _ClientDispatchDetailsScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        response.messageDetail ?? '',
+                        response.message ?? 'Despacho completado exitosamente',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       // Removed hardcoded status message - should come from backend

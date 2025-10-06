@@ -1,10 +1,10 @@
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 /// Helper para reproducir sonidos de feedback
 class AppSounds {
   // Mantener una única instancia del player para evitar problemas en Android
-  static final AudioPlayer _player = AudioPlayer(playerId: 'gbi_sounds');
+  static AudioPlayer? _player;
   
   // Cache para los sources de audio
   static final Map<String, Source> _sources = {};
@@ -17,8 +17,13 @@ class AppSounds {
     if (_initialized) return;
     
     try {
+      // Crear una nueva instancia del player si no existe
+      _player?.dispose();
+      _player = AudioPlayer(playerId: 'gbi_sounds');
+      
       // Configurar el player
-      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player?.setReleaseMode(ReleaseMode.release);
+      await _player?.setVolume(1.0);
       
       // Precargar los sonidos
       _sources['error'] = AssetSource('sounds/error.wav');
@@ -35,9 +40,10 @@ class AppSounds {
     try {
       await _ensureInitialized();
       final source = _sources['error'];
-      if (source != null) {
-        await _player.stop(); // Detener cualquier sonido previo
-        await _player.play(source, volume: 5.0);
+      final player = _player;
+      if (source != null && player != null) {
+        await player.stop(); // Detener cualquier sonido previo
+        await player.play(source);
       }
     } catch (e) {
       debugPrint('Error reproduciendo sonido de error: $e');
@@ -49,12 +55,25 @@ class AppSounds {
     try {
       await _ensureInitialized();
       final source = _sources['success'];
-      if (source != null) {
-        await _player.stop(); // Detener cualquier sonido previo
-        await _player.play(source, volume: 5.0);
+      final player = _player;
+      if (source != null && player != null) {
+        await player.stop(); // Detener cualquier sonido previo
+        await player.play(source);
       }
     } catch (e) {
       debugPrint('Error reproduciendo sonido de éxito: $e');
+    }
+  }
+
+  /// Libera los recursos del reproductor
+  static Future<void> dispose() async {
+    try {
+      await _player?.dispose();
+      _player = null;
+      _initialized = false;
+      _sources.clear();
+    } catch (e) {
+      debugPrint('Error liberando recursos de audio: $e');
     }
   }
 }

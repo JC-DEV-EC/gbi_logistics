@@ -52,7 +52,7 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
     if (!mounted) throw Exception('Widget desmontado');
 
     if (!response.isSuccessful || response.content == null) {
-      throw Exception(response.messageDetail ?? response.message ?? 'No se pudieron cargar los detalles');
+      throw Exception(response.messageDetail ?? 'No se pudieron cargar los detalles');
     }
 
     _lastDetails = response.content!;
@@ -154,20 +154,78 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Estado actual:',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                    ),
-                    StateBadge(
-                      state: cube.state,
-                      label: cube.stateLabel ?? TransportCubeState.getLabel(cube.state),
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Estado actual:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 4),
+                      StateBadge(
+                        state: cube.state,
+                        label: cube.stateLabel ?? TransportCubeState.getLabel(cube.state),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tipo de cubo:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        cube.typeLabel ?? '',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  'Fecha de registro: ${DateHelper.formatDateTime(cube.registerDateTime)}',
-                  style: const TextStyle(fontSize: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Fecha de registro:',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            DateHelper.formatDateTime(cube.registerDateTime),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (cube.operatorName != null) ...[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Creado por:',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              cube.operatorName!,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 16),
                 GuideCounter(

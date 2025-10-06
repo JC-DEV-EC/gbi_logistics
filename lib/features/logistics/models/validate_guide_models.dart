@@ -47,9 +47,9 @@ class GetClientBySubcourierResponse {
     this.clients,
   });
 
-  factory GetClientBySubcourierResponse.fromJson(Map<String, dynamic> json) {
+  factory GetClientBySubcourierResponse.fromJson(Map<String, dynamic> content) {
     return GetClientBySubcourierResponse(
-      clients: (json['clients'] as List?)
+      clients: (content['clients'] as List<dynamic>?)
           ?.map((e) => ClientBySubcourierItem.fromJson(e as Map<String, dynamic>))
           .toList(),
     );

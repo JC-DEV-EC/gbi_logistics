@@ -18,32 +18,20 @@ class StateBadge extends StatelessWidget {
 final color = Color(TransportCubeState.getColor(state));
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 31),
+        color: color,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: color,
-          width: 1,
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-TransportCubeState.getIcon(state),
-            color: color,
-            size: 20,
-          ),
-          const SizedBox(width: 8),
           Text(
             label,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: color,
+              color: Colors.white,
               fontWeight: FontWeight.w600,
+              fontSize: 14.0,
             ),
           ),
         ],

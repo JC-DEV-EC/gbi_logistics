@@ -103,11 +103,13 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-      itemCount: provider.cubes.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
+    return Stack(
+      children: [
+        ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          itemCount: provider.cubes.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
         final cube = provider.cubes[index];
         final isSelected = provider.isCubeSelected(cube.id);
 
@@ -167,7 +169,7 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
                         const SizedBox(width: 4),
                         StateBadge(
                           state: cube.state,
-                          label: cube.stateLabel ?? 'Desconocido',
+                          label: cube.state, // Mostrar el estado directamente
                         ),
                       ],
                     ),
@@ -210,6 +212,41 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
                             ),
                           ],
                         ),
+                        if (cube.operatorName != null && cube.operatorName!.isNotEmpty)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_outline,
+                                size: 20,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                cube.operatorName!,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.category_outlined,
+                              size: 20,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              cube.typeLabel ?? '',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
@@ -219,6 +256,8 @@ class _TransportCubeListScreenState extends State<TransportCubeListScreen> {
           ),
         );
       },
+        ),
+      ],
     );
   }
 }

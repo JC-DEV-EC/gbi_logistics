@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/transport_cube_provider.dart';
 import '../models/transport_cube_state.dart';
+import '../models/cube_type.dart';
 import '../presentation/helpers/error_helper.dart';
 
 class NewTransportCubeScreen extends StatefulWidget {
@@ -58,7 +59,10 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
     });
 
     try {
-      final apiResp = await context.read<TransportCubeProvider>().createTransportCube(_guides);
+      final apiResp = await context.read<TransportCubeProvider>().createTransportCube(
+        _guides,
+        CubeType.transitToWarehouse, // Por defecto, al crear un cubo nuevo siempre es tránsito a bodega
+      );
 
       if (!mounted) return;
 
@@ -69,17 +73,14 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
         
         if (!mounted) return;
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiResp.messageDetail ?? ''),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // Ahora usa el nuevo sistema: message para éxitos
+        apiResp.showSuccessMessage(context);
       } else {
-        ErrorHelper.showErrorSnackBar(context, apiResp.messageDetail ?? '');
+        // messageDetail para errores
+        apiResp.showErrorMessage(context);
       }
     } catch (e) {
-      ErrorHelper.showErrorSnackBar(context, e);
+      MessageHelper.showErrorSnackBar(context, e.toString());
     } finally {
       if (mounted) {
         setState(() {

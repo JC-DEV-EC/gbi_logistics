@@ -26,7 +26,6 @@ class GuideDetailsService {
       // Si la respuesta tiene un mensaje pero no tiene contenido, es un error
       if (!response.isSuccessful || response.content == null) {
         return ApiResponse.error(
-          message: response.message,
           messageDetail: response.messageDetail,
         );
       }
@@ -34,7 +33,6 @@ class GuideDetailsService {
       return response;
     } catch (e) {
       return ApiResponse.error(
-        message: 'Error al buscar la guía',
         messageDetail: 'Ocurrió un error al buscar la guía: $e',
       );
     }

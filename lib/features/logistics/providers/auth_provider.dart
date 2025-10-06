@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as developer;
 import '../../../core/services/app_logger.dart';
+import '../../../core/services/version_service.dart';
 import '../services/auth_service.dart';
 import '../models/auth_models.dart';
 import '../../../core/services/secure_credentials_service.dart';
@@ -22,6 +23,20 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _restoreSession() async {
     try {
+      // Verificar primero la versión
+      final versionHeaders = VersionService.instance.versionHeaders;
+      final versionResponse = VersionResponse.fromHeaders(versionHeaders);
+      
+      // Forzar actualización si es requerida
+      if (versionResponse.updateRequired) {
+        _loginData = null;
+        _isAuthenticated = false;
+        await _authService.logout();
+        await _secureStorage.clearCredentials();
+        notifyListeners();
+        return;
+      }
+      
       final loginData = await _authService.restoreSession();
       if (loginData != null) {
         _loginData = loginData;
@@ -87,6 +102,14 @@ class AuthProvider extends ChangeNotifier {
       );
 
       final response = await _authService.login(request);
+
+      // Verificar si el error es por versión
+      if (response.messageDetail?.contains('versión mínima') ?? false) {
+        _error = response.messageDetail;
+        await logout();
+        notifyListeners();
+        return false;
+      }
 
       AppLogger.log(
         'Login response received:\n- Success: ${response.isSuccessful}\n- Has Content: ${response.content != null}',

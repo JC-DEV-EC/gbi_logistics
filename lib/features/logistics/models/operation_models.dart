@@ -1,3 +1,6 @@
+import '../../../core/services/app_logger.dart';
+import 'cube_type.dart';
+
 /// Request para actualizar estado de una guía
 class UpdateGuideStatusRequest {
   final List<String> guides;
@@ -12,6 +15,67 @@ class UpdateGuideStatusRequest {
     'guides': guides,
     'newStatus': newStatus,
   };
+}
+
+/// Request para despachar un cubo de transporte a un cliente
+class DispatchedCubeToClientRequest {
+  final List<int> transportCubeIds;
+
+  DispatchedCubeToClientRequest({
+    required this.transportCubeIds,
+  }) {
+    if (transportCubeIds.isEmpty) {
+      throw ArgumentError('La lista de cubos no puede estar vacía');
+    }
+  }
+
+  Map<String, dynamic> toJson() => {
+    'transportCubeIds': transportCubeIds,
+  };
+}
+
+/// Respuesta genérica que envuelve las operaciones
+class GenericOperationResponseGenericResponse {
+  final int code;
+  final String? responseType;
+  final String? message;
+  final String? messageDetail;
+  final GenericOperationResponse? content;
+
+  const GenericOperationResponseGenericResponse({
+    required this.code,
+    this.responseType,
+    this.message,
+    this.messageDetail,
+    this.content,
+  });
+
+  factory GenericOperationResponseGenericResponse.fromJson(Map<String, dynamic> json) {
+    return GenericOperationResponseGenericResponse(
+      code: json['code'] as int,
+      responseType: json['responseType'] as String?,
+      message: json['message'] as String?,
+      messageDetail: json['messageDetail'] as String?,
+      content: json['content'] == null
+          ? null
+          : GenericOperationResponse.fromJson(json['content'] as Map<String, dynamic>),
+    );
+  }
+}
+
+/// Respuesta genérica para operaciones
+class GenericOperationResponse {
+  final String? userMessage;
+
+  const GenericOperationResponse({
+    this.userMessage,
+  });
+
+  factory GenericOperationResponse.fromJson(Map<String, dynamic> json) {
+    return GenericOperationResponse(
+      userMessage: json['userMessage'] as String?,
+    );
+  }
 }
 
 class UpdateGuideStatusResponse {
@@ -65,8 +129,12 @@ class NewTransportCubeRequest {
   /// Códigos de las guías a despachar
   final List<String> guides;
 
+  /// Tipo de cubo a utilizar
+  final CubeType type;
+
   NewTransportCubeRequest({
     required this.guides,
+    required this.type,
   }) {
     if (guides.isEmpty) {
       throw ArgumentError('La lista de guías no puede estar vacía');
@@ -75,6 +143,7 @@ class NewTransportCubeRequest {
 
   Map<String, dynamic> toJson() => {
     'guides': guides,
+    'type': type.toString(),
   };
 }
 
@@ -256,15 +325,42 @@ class GetTransportCubesPaginatedResponse {
   });
 
   factory GetTransportCubesPaginatedResponse.fromJson(Map<String, dynamic> json) {
-    // La respuesta viene dentro de content
-    final content = json['content'] as Map<String, dynamic>;
-    return GetTransportCubesPaginatedResponse(
-      totalRegister: content['totalRegister'] as int,
-      registers: (content['registers'] as List<dynamic>?)
-          ?.map((e) => TransportCubeInfoAPI.fromJson(e as Map<String, dynamic>))
-          .toList() ?? [],
-      userMessage: content['userMessage'] as String?,
-    );
+    try {
+      // La respuesta viene dentro de content
+      final content = json['content'];
+      if (content == null) {
+        AppLogger.error(
+          'Content es null en GetTransportCubesPaginatedResponse',
+          error: json,
+          source: 'GetTransportCubesPaginatedResponse',
+        );
+        return GetTransportCubesPaginatedResponse(
+          totalRegister: 0,
+          registers: [],
+          userMessage: 'Error al procesar la respuesta',
+        );
+      }
+
+      final contentMap = content as Map<String, dynamic>;
+      return GetTransportCubesPaginatedResponse(
+        totalRegister: contentMap['totalRegister'] as int? ?? 0,
+        registers: (contentMap['registers'] as List<dynamic>?)
+            ?.map((e) => TransportCubeInfoAPI.fromJson(e as Map<String, dynamic>))
+            .toList() ?? [],
+        userMessage: contentMap['userMessage'] as String?,
+      );
+    } catch (e) {
+      AppLogger.error(
+        'Error parseando GetTransportCubesPaginatedResponse',
+        error: e,
+        source: 'GetTransportCubesPaginatedResponse',
+      );
+      return GetTransportCubesPaginatedResponse(
+        totalRegister: 0,
+        registers: [],
+        userMessage: 'Error al procesar la respuesta',
+      );
+    }
   }
 }
 
@@ -275,20 +371,44 @@ class TransportCubeInfoAPI {
   final String state;
   final int guides;
   final String? stateLabel;
+  final CubeType type;
+  final String? typeLabel;
+  final String? operatorName;
 
   const TransportCubeInfoAPI({
     required this.id,
     required this.registerDateTime,
     required this.state,
     required this.guides,
+    required this.type,
     this.stateLabel,
+    this.typeLabel,
+    this.operatorName,
   });
 
-  factory TransportCubeInfoAPI.fromJson(Map<String, dynamic> json) => TransportCubeInfoAPI(
-    id: json['id'] as int,
-    registerDateTime: DateTime.parse(json['registerDateTime'] as String),
-    state: json['state'] as String,
-    guides: json['guides'] as int,
-    stateLabel: json['stateLabel'] as String?,
-  );
+  factory TransportCubeInfoAPI.fromJson(Map<String, dynamic> json) {
+    try {
+      return TransportCubeInfoAPI(
+        id: json['id'] as int,
+        registerDateTime: DateTime.parse(json['registerDateTime'] as String),
+        state: json['state'] as String,
+        guides: json['guides'] as int,
+        stateLabel: json['stateLabel'] as String?,
+        type: CubeType.fromDynamic(json['type']) ?? CubeType.transitToWarehouse,
+        typeLabel: json['typeLabel'] as String?,
+        operatorName: json['operatorName'] as String?,
+      );
+    } catch (e) {
+      AppLogger.error(
+        'Error parsing TransportCubeInfoAPI',
+        error: e,
+        source: 'TransportCubeInfoAPI',
+      );
+      AppLogger.log(
+        'JSON content: $json',
+        source: 'TransportCubeInfoAPI',
+      );
+      rethrow;
+    }
+  }
 }
