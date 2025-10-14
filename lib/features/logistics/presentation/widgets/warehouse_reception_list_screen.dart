@@ -151,9 +151,7 @@ return ListView.builder(
     return Card(
       clipBehavior: Clip.hardEdge,
       child: InkWell(
-        onTap: () {
-          // Aquí iría la navegación a detalles de guía si es necesario
-        },
+        onTap: () {},  // No se requiere acción al tocar
         onLongPress: () {
           if (code.isNotEmpty) provider.toggleGuideSelection(code);
         },
@@ -197,9 +195,24 @@ return ListView.builder(
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.info_outline),
-          onPressed: () => _showGuideDetails(context, guide),
-          tooltip: 'Ver detalles',
+          icon: const Icon(Icons.remove_circle_outline),
+          color: Colors.red,
+          tooltip: 'Quitar guía',
+          onPressed: () {
+            final provider = context.read<GuideProvider>();
+            final code = guide.code as String?;
+            if (code != null) {
+              // Si estaba seleccionada para procesar, quitarla de la selección
+              if (provider.isGuideSelected(code)) {
+                provider.toggleGuideSelection(code);
+              }
+              // Limpiar estado UI y remover de la lista principal
+              provider.removeGuideUiState(code);
+              provider.setGuides(
+                provider.guides.where((g) => g.code != code).toList(),
+              );
+            }
+          },
         ),
       ],
     );
@@ -262,89 +275,6 @@ return ListView.builder(
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
             ),
           ],
-        ),
-      ],
-    );
-  }
-
-  /// Diálogo con detalles de la guía
-  void _showGuideDetails(BuildContext context, dynamic guide) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Guía ${guide.code ?? '—'}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDetailRow(
-                context,
-                'Estado',
-                guide.stateLabel ?? 'Desconocido',
-                Icons.local_shipping_outlined,
-              ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                context,
-                'Fecha última actualización',
-                DateHelper.formatDateTime(guide.updateDateTime),
-                Icons.calendar_today_outlined,
-              ),
-              if (guide.subcourierName != null) ...[
-                const SizedBox(height: 12),
-                _buildDetailRow(
-                  context,
-                  'Subcourier',
-                  guide.subcourierName!,
-                  Icons.person_outline,
-                ),
-              ],
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                context,
-                'Paquetes',
-                '${guide.packages}',
-                Icons.inventory_2_outlined,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Fila reutilizable para los detalles
-  Widget _buildDetailRow(
-      BuildContext context, String label, String value, IconData icon) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              Text(
-                value,
-                style: theme.textTheme.bodyLarge,
-              ),
-            ],
-          ),
         ),
       ],
     );

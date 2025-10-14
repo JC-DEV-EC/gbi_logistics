@@ -4,10 +4,14 @@ import '../../features/logistics/providers/auth_provider.dart';
 import '../services/app_logger.dart';
 
 class AuthLifecycleObserver with WidgetsBindingObserver {
-  final BuildContext context;
-  final bool _disposed = false;
+  final BuildContext Function() getContext;
+  bool _disposed = false;
 
-  AuthLifecycleObserver(this.context);
+  AuthLifecycleObserver(this.getContext);
+
+  void dispose() {
+    _disposed = true;
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
@@ -18,7 +22,9 @@ class AuthLifecycleObserver with WidgetsBindingObserver {
       );
       
       try {
-        final auth = context.read<AuthProvider>();
+        final ctx = getContext();
+        // Usar Provider.of para acceso más seguro
+        final auth = Provider.of<AuthProvider>(ctx, listen: false);
         // Intentar refrescar token sin forzar logout
         final refreshed = await auth.ensureFreshToken();
         

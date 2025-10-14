@@ -276,13 +276,16 @@ class HttpService {
       T Function(Map<String, dynamic> json) fromJson, {
         bool suppressAuthHandling = false,
       }) async {
-    AppLogger.log(
-      'HTTP POST Request:\n'
-          'URL: $baseUrl$path\n'
-          'Headers: $_headers\n'
-          'Body: ${jsonEncode(data)}',
-      source: 'HttpService',
-    );
+    // Solo log para operaciones importantes (no refresh token ni validaciones)
+    if (!path.contains('refresh-token') && !path.contains('check')) {
+      AppLogger.log(
+        'HTTP POST Request:\n'
+            'URL: $baseUrl$path\n'
+            'Headers: $_headers\n'
+            'Body: ${jsonEncode(data)}',
+        source: 'HttpService',
+      );
+    }
 
     try {
       if (!suppressAuthHandling && onTokenRefreshNeeded != null) {

@@ -347,7 +347,8 @@ class _ClientDispatchDetailsScreenState
       AppLogger.log(
         'Respuesta del despacho:\n'
         '- Exitoso: ${response.isSuccessful}\n'
-        '- Mensaje: ${response.messageDetail}',
+        '- Mensaje éxito: ${response.message}\n'
+        '- Mensaje error: ${response.messageDetail}',
         source: 'ClientDispatchDetailsScreen'
       );
 

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/guide_provider.dart';
 import '../presentation/widgets/app_drawer.dart';
-import '../presentation/widgets/client_dispatch_list_screen.dart';
 import '../presentation/widgets/client_dispatch_scan_box.dart';
+import '../presentation/widgets/subcourier_client_selector.dart';
+import '../presentation/helpers/date_helper.dart';
+import '../models/operation_models.dart';
 
 /// Pantalla para despacho a cliente
 class ClientDispatchScreen extends StatefulWidget {
@@ -17,15 +18,29 @@ class ClientDispatchScreen extends StatefulWidget {
 }
 
 class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
-  void _showSuccessMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  
+  /// Reinicia el proceso completo
+  Future<void> _refreshProcess(GuideProvider guideProvider) async {
+    // Simular delay para mostrar el indicador de refresh
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Reiniciar el estado completo
+    guideProvider.unlockSelectors();
+    guideProvider.resetSelections();
+    guideProvider.clearSelectedGuides();
+    guideProvider.setGuides([]);
+    guideProvider.errorNotifier.value = null;
+    
+    // Mostrar mensaje de confirmación
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Proceso reiniciado - Seleccione un subcourier para comenzar'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -35,7 +50,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
         appBar: AppBar(
           title: const Text('Despacho en Bodega'),
         ),
-        // Mostrar mensaje de éxito cuando se complete el despacho
+        drawer: const AppDrawer(),
         onEndDrawerChanged: (isOpen) {
           if (!isOpen && context.mounted) {
             final provider = context.read<GuideProvider>();
@@ -45,25 +60,44 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
             }
           }
         },
-        drawer: const AppDrawer(),
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () => FocusScope.of(context).unfocus(),
-          child: Builder(
-            builder: (context) => RepaintBoundary(
-              child: Consumer2<GuideProvider, AuthProvider>(
-                child: const Divider(height: 1),
-                builder: (context, guideProvider, authProvider, child) {
-                  return Column(
-                    children: [
-                      _buildCourierSelector(guideProvider, authProvider),
-                      _buildScanBox(guideProvider),
-                      child!, // Usar el child pre-construido
-                      _buildErrorMessage(guideProvider),
-                      _buildGuideList(),
-                    ],
-                  );
-                },
+        body: SafeArea(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Builder(
+              builder: (context) => RepaintBoundary(
+                child: Consumer2<GuideProvider, AuthProvider>(
+                  builder: (context, guideProvider, authProvider, _) {
+                    return RefreshIndicator(
+                      onRefresh: () => _refreshProcess(guideProvider),
+                      child: Column(
+                        children: [
+                          Container(
+                            color: Theme.of(context).colorScheme.surface,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildCourierSelector(guideProvider),
+                                _buildScanBox(guideProvider),
+                                _buildErrorMessage(guideProvider),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: guideProvider.guides.isEmpty
+                                ? _buildEmptyState()
+                                : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: guideProvider.guides.length,
+                              itemBuilder: (context, index) =>
+                                  _buildGuideCard(guideProvider.guides[index]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -72,73 +106,68 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
     );
   }
 
-  /// Selector de mensajero
-  Widget _buildCourierSelector(
-      GuideProvider guideProvider,
-      AuthProvider authProvider,
-      ) {
-    return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Autocomplete<int>(
-          key: ValueKey(guideProvider.selectedSubcourierId),
-          fieldViewBuilder:
-              (context, textEditingController, focusNode, onFieldSubmitted) {
-            return TextFormField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                labelText: 'Seleccionar Subcourier',
-                hintText: 'Escriba o seleccione un subcourier',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Buscar subcourier',
-                  onPressed: () {
-                    if (!focusNode.hasFocus) {
-                      focusNode.requestFocus();
-                    }
-                  },
+  /// Construye el widget para mostrar cuando no hay guías
+  Widget _buildEmptyState() {
+    return ListView(
+      children: [
+        const SizedBox(height: 120),
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Ícono de archivo/documento
+              Icon(
+                Icons.folder_outlined,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 24),
+              // Título principal
+              Text(
+                'No hay guías agregadas',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            );
-          },
-          initialValue: TextEditingValue(
-            text: authProvider.subcouriers
-                .firstWhere(
-                  (sub) => sub.id == guideProvider.selectedSubcourierId,
-              orElse: () => SubcourierInfo(id: 0, name: ''),
-            )
-                .name ??
-                '',
+              const SizedBox(height: 8),
+              // Subtítulo/instrucción
+              Text(
+                'Escanee o ingrese los códigos de las guías',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[500],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          optionsBuilder: (textEditingValue) {
-            if (textEditingValue.text.isEmpty) {
-              return authProvider.subcouriers.map((sub) => sub.id);
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCourierSelector(GuideProvider guideProvider) {
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+        child: SubcourierClientSelector(
+          isLocked: guideProvider.selectorsLocked,
+          onSubcourierSelected: (subcourierId) {
+            if (subcourierId != null) {
+              guideProvider.setSelectedSubcourier(subcourierId);
             }
-            return authProvider.subcouriers
-                .where(
-                  (sub) => (sub.name ?? '')
-                  .toLowerCase()
-                  .contains(textEditingValue.text.toLowerCase()),
-            )
-                .map((sub) => sub.id);
           },
-          displayStringForOption: (int subcourierId) {
-            return authProvider.subcouriers
-                .firstWhere((sub) => sub.id == subcourierId)
-                .name ??
-                'Sin nombre';
+          onClientSelected: (clientId) {
+            guideProvider.setSelectedClient(clientId);
           },
-          onSelected: (int value) {
-            guideProvider.setSelectedSubcourier(value);
+          onRequiresClientChanged: (requiresClient) {
+            guideProvider.setRequiresClient(requiresClient);
           },
         ),
       ),
     );
   }
 
-  /// Box de escaneo en la parte superior
   Widget _buildScanBox(GuideProvider guideProvider) {
     return RepaintBoundary(
       child: Padding(
@@ -150,7 +179,6 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
     );
   }
 
-  /// Mensaje de error (si existe)
   Widget _buildErrorMessage(GuideProvider guideProvider) {
     return ValueListenableBuilder<String?>(
       valueListenable: guideProvider.errorNotifier,
@@ -158,7 +186,7 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
         if (error == null) return const SizedBox.shrink();
 
         return Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.only(bottom: 16),
           child: Text(
             error,
             style: const TextStyle(color: Colors.red),
@@ -168,10 +196,122 @@ class _ClientDispatchScreenState extends State<ClientDispatchScreen> {
     );
   }
 
-  /// Lista de guías
-  Widget _buildGuideList() {
-    return const Expanded(
-      child: ClientDispatchListScreen(),
+  Widget _buildGuideCard(GuideInfo guide) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildGuideHeader(guide),
+            const SizedBox(height: 8),
+            _buildGuideDetails(guide),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuideHeader(GuideInfo guide) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Guía ${guide.code}',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline),
+          color: Colors.red,
+          onPressed: () {
+            final guideCode = guide.code;
+            if (guideCode != null) {
+              final provider = context.read<GuideProvider>();
+              // Quitar la guía de la lista de guías seleccionadas
+              if (provider.isGuideSelected(guideCode)) {
+                provider.toggleGuideSelection(guideCode);
+              }
+              // Quitar la guía del estado UI
+              provider.removeGuideUiState(guideCode);
+              // Quitar la guía de la lista principal
+              final newGuides = provider.guides.where((g) => g.code != guideCode).toList();
+              provider.setGuides(newGuides);
+              
+              // Si no quedan guías, desbloquear selectores
+              if (newGuides.isEmpty) {
+                provider.unlockSelectors();
+              }
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuideDetails(GuideInfo guide) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.local_shipping_outlined, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              guide.subcourierName ?? '',
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Icon(Icons.calendar_today_outlined, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              DateHelper.formatDateTime(guide.updateDateTime),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Icon(Icons.inventory_2_outlined, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'Paquetes: ${guide.packages}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                guide.stateLabel ?? '',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showSuccessMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }

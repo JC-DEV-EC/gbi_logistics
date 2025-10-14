@@ -8,8 +8,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gbi_logistics/main.dart';
-import 'package:gbi_logistics/features/logistics/screens/login_screen.dart';
+import 'package:logiruta/main.dart';
+import 'package:logiruta/features/logistics/screens/login_screen.dart';
 
 void main() {
   group('Integration Tests', () {

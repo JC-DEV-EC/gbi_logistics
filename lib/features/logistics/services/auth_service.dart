@@ -89,9 +89,17 @@ class AuthService {
 
     return response.isSuccessful;
   }
+  bool _isRefreshing = false;
+
   /// Intenta refrescar el token
   Future<bool> refreshTokenIfNeeded() async {
+    // Evitar múltiples refreshes simultáneos
+    if (_isRefreshing) {
+      return true;
+    }
+
     try {
+      _isRefreshing = true;
       // Verificar si hay sesión activa
       final hasSession = await _storage.hasActiveSession();
       if (!hasSession) return false;
@@ -147,6 +155,8 @@ class AuthService {
       return false;
     } catch (e) {
       return false;
+    } finally {
+      _isRefreshing = false;
     }
   }
 }

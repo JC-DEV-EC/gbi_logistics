@@ -1,10 +1,10 @@
 /// Configuración de la API
 class ApiConfig {
-  /// Tiempo antes de expiración para refrescar el token (5 minutos)
-  static const refreshTokenBeforeExpiry = Duration(minutes: 5);
+  /// Tiempo antes de expiración para refrescar el token (30 minutos)
+  static const refreshTokenBeforeExpiry = Duration(minutes: 30);
 
-  /// Intervalo para verificar el estado del token (10 minutos)
-  static const tokenCheckInterval = Duration(minutes: 10);
+  /// Intervalo para verificar el estado del token (15 minutos)
+  static const tokenCheckInterval = Duration(minutes: 15);
   /// URL base de la API
   static const String baseUrl = 'https://internalapi.gbilogistics.net';
 

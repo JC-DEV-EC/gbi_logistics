@@ -39,6 +39,30 @@ class ClientBySubcourierItem {
   }
 }
 
+/// Respuesta de validación de estado de guía
+class ValidateGuideStatusResponse {
+  final bool isValid;
+  final String? currentState;
+  final String? requiredState;
+  final String? message;
+
+  const ValidateGuideStatusResponse({
+    required this.isValid,
+    this.currentState,
+    this.requiredState,
+    this.message,
+  });
+
+  factory ValidateGuideStatusResponse.fromJson(Map<String, dynamic> json) {
+    return ValidateGuideStatusResponse(
+      isValid: json['isValid'] as bool? ?? false,
+      currentState: json['currentState'] as String?,
+      requiredState: json['requiredState'] as String?,
+      message: json['message'] as String?,
+    );
+  }
+}
+
 /// Response para obtener clientes por subcourier
 class GetClientBySubcourierResponse {
   final List<ClientBySubcourierItem>? clients;
@@ -56,7 +80,13 @@ class GetClientBySubcourierResponse {
   }
 }
 
+
 /// Tipos de proceso para validación de guías
 class ValidateGuideProcessType {
+  /// Para registrar cubo
   static const String toRegisterCube = 'ToRegisterCube';
+  
+  /// Para despachar en bodega
+  static const String toDispatchToClient = 'ToDispatchToClient';
+
 }

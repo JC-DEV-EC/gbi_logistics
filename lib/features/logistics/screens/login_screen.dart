@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:developer' as developer;
 import '../../../core/presentation/widgets/logging_state.dart';
+import '../../../core/presentation/widgets/login_background.dart';
+import '../presentation/helpers/error_helper.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -83,12 +85,10 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
       if (mounted) {
         final error = context.read<AuthProvider>().error;
         if (error != null && error.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              duration: const Duration(seconds: 10),
-            ),
+          MessageHelper.showIconSnackBar(
+            context,
+            message: error,
+            isSuccess: false,
           );
         }
       }
@@ -101,8 +101,8 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
     final auth = context.watch<AuthProvider>();
 
     return Scaffold(
-      body: SafeArea(
-        child: Center(
+      body: LoginBackground(
+        child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -116,18 +116,26 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                     // Logo principal con altura flexible
                     SizedBox(
                       width: MediaQuery.of(context).size.width * 0.5,
-                      height: 120,
+                      height: 160,
                       child: Image.asset(
                         'assets/images/logo.png',
                         fit: BoxFit.contain,
                       ),
                     ),
                     const SizedBox(height: 16),
+                Text(
+                      'Bienvenido!',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
                     Text(
-                      'Conectando el Mundo',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
+                      'Ingrese datos personales \nde su cuenta de empleado',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: Colors.white70,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -137,6 +145,10 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
 
                 // Card con formulario
                 Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Form(
@@ -145,8 +157,10 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            'Iniciar Sesión',
-                            style: theme.textTheme.headlineSmall,
+                            'Inicio de sesión',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 24),
@@ -218,17 +232,25 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                           const SizedBox(height: 24),
 
                           // Botón de login
-                          FilledButton(
-                            onPressed: auth.isLoading ? null : _handleSubmit,
-                            child: auth.isLoading
-                                ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                          SizedBox(
+                            height: 50,
+                            child: FilledButton(
+                              onPressed: auth.isLoading ? null : _handleSubmit,
+                              style: FilledButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                            )
-                                : const Text('Ingresar'),
+                              child: auth.isLoading
+                                  ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                                  : const Text('Ingresar'),
+                            ),
                           ),
                         ],
                       ),

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/transport_cube_provider.dart';
-import '../models/transport_cube_state.dart';
+import '../providers/guide_provider.dart';
+import '../presentation/widgets/customs_dispatch_scan_box.dart';
+import '../models/operation_models.dart';
 import '../models/cube_type.dart';
 import '../presentation/helpers/error_helper.dart';
 
+/// Pantalla para crear un nuevo cubo de transporte
 class NewTransportCubeScreen extends StatefulWidget {
   const NewTransportCubeScreen({super.key});
 
@@ -13,181 +17,138 @@ class NewTransportCubeScreen extends StatefulWidget {
 }
 
 class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
-  final TextEditingController _guideController = TextEditingController();
-  final List<String> _guides = [];
-  bool _isProcessing = false;
-
-  @override
-  void dispose() {
-    _guideController.dispose();
-    super.dispose();
-  }
-
-  void _addGuide(String? guide) {
-    if (guide == null || guide.isEmpty) return;
-
-    final cleanGuide = guide.trim();
-    if (cleanGuide.isEmpty) return;
-
-    setState(() {
-      if (!_guides.contains(cleanGuide)) {
-        _guides.insert(0, cleanGuide);
-      }
-      _guideController.clear();
-    });
-  }
-
-  void _removeGuide(String guide) {
-    setState(() {
-      _guides.remove(guide);
-    });
-  }
-
-  Future<void> _createCube() async {
-    if (_guides.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(''),  // Let backend provide the message
-          backgroundColor: Colors.orange,
+  Future<bool> _confirmClose() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (confirmCtx) => AlertDialog(
+        title: const Text('¿Cerrar ventana?'),
+        content: const Text(
+          '¿Está seguro que desea cerrar esta ventana? Se perderán las guías escaneadas.',
         ),
-      );
-      return;
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(confirmCtx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(confirmCtx, true),
+            child: const Text('Sí, cerrar'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
 
-    setState(() {
-      _isProcessing = true;
-    });
+  Future<void> _createNewCube(List<String> guides) async {
+    final provider = context.read<TransportCubeProvider>();
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final apiResp = await context.read<TransportCubeProvider>().createTransportCube(
-        _guides,
-        CubeType.transitToWarehouse, // Por defecto, al crear un cubo nuevo siempre es tránsito a bodega
+      final response = await provider.createTransportCube(
+        guides,
+        CubeType.transitToWarehouse,
       );
 
       if (!mounted) return;
 
-      if (apiResp.isSuccessful) {
-        final provider = context.read<TransportCubeProvider>();
-        // Asegurar que estamos en el estado correcto después de crear el cubo
-        await provider.changeState(TransportCubeState.created);
-        
+      if (!mounted) return;
+
+      if (response.isSuccessful) {
+        await provider.loadCubes(force: true);
         if (!mounted) return;
         Navigator.pop(context);
-        // Ahora usa el nuevo sistema: message para éxitos
-        apiResp.showSuccessMessage(context);
-      } else {
-        // messageDetail para errores
-        apiResp.showErrorMessage(context);
       }
-    } catch (e) {
-      MessageHelper.showErrorSnackBar(context, e.toString());
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
+
+      final message = response.isSuccessful
+          ? (response.message ?? 'Operación exitosa')
+          : (response.messageDetail ?? 'Error en la operación');
+
+      MessageHelper.showIconSnackBar(
+        context,
+        message: message,
+        isSuccess: response.isSuccessful,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      MessageHelper.showIconSnackBar(
+        context,
+        message: 'Error al crear el cubo',
+        isSuccess: false,
+      );
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(
+                Icons.error,
+                color: Colors.white,
+                size: 24,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Error al crear el cubo',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFE53E3E),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nuevo Cubo'),
+        title: const Text('Crear Nuevo Cubo'),
+        leading: IconButton(
+          tooltip: 'Cerrar',
+          icon: const Icon(Icons.close),
+          onPressed: () async {
+            if (await _confirmClose()) {
+              if (!mounted) return;
+              Navigator.pop(context);
+            }
+          },
+        ),
       ),
-      body: Column(
-        children: [
-          // Entrada de guías
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _guideController,
-              decoration: InputDecoration(
-                labelText: 'Guía',
-                hintText: 'Escanee o ingrese el código de la guía',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _addGuide(_guideController.text),
-                ),
-              ),
-              onSubmitted: _addGuide,
-              enabled: !_isProcessing,
-            ),
-          ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: CustomsDispatchScanBox(
+          onComplete: (guides, createCube) async {
+            if (createCube) {
+              await _createNewCube(guides);
+            } else {
+              final guideProvider = context.read<GuideProvider>();
 
-          // Lista de guías agregadas
-          Expanded(
-            child: _guides.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: 64,
-                          color: theme.colorScheme.outline,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No hay guías agregadas',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Escanee o ingrese los códigos de las guías',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _guides.length,
-                    separatorBuilder: (_, __) => const Divider(),
-                    itemBuilder: (context, index) {
-                      final guide = _guides[index];
-                      return ListTile(
-                        leading: const Icon(Icons.inventory_2_outlined),
-                        title: Text(guide),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.remove_circle_outline),
-                          onPressed: _isProcessing ? null : () => _removeGuide(guide),
-                          color: Colors.red,
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomAppBar(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _isProcessing || _guides.isEmpty ? null : _createCube,
-                  icon: _isProcessing
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(),
-                        )
-                      : const Icon(Icons.add),
-                  label: const Text('Crear Cubo'),
-                ),
-              ),
-            ],
-          ),
+              final request = UpdateGuideStatusRequest(
+                guides: guides,
+                newStatus: TrackingStateType.dispatchedFromCustoms,
+              );
+
+              final resp = await guideProvider.updateGuideStatus(request);
+              if (!mounted) return;
+
+              resp.showMessage(context);
+              Navigator.pop(context);
+            }
+          },
         ),
       ),
     );

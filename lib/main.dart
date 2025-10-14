@@ -149,6 +149,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     _tokenRefreshTimer?.cancel();
     if (_authObserver != null) {
+      _authObserver!.dispose();
       WidgetsBinding.instance.removeObserver(_authObserver!);
       _authObserver = null;
     }
@@ -159,9 +160,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Inicializar observer de auth cuando el context esté disponible
-    _authObserver ??= AuthLifecycleObserver(context);
-    WidgetsBinding.instance.addObserver(_authObserver!);
+    if (_authObserver == null) {
+      // Esperar a que el árbol esté montado para tener acceso al contexto correcto
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        
+        _authObserver = AuthLifecycleObserver(() {
+          // Usar el contexto del navigator para asegurar acceso a los providers
+          final ctx = _navigatorKey.currentContext;
+          if (ctx == null) throw Exception('Navigator context not available');
+          return ctx;
+        });
+        
+        WidgetsBinding.instance.addObserver(_authObserver!);
+      });
+    }
   }
 
   @override

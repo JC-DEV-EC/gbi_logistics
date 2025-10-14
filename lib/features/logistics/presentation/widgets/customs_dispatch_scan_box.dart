@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
 import '../controllers/scan_controller.dart';
+import '../../models/validate_guide_models.dart';
+import '../../providers/guide_validation_provider.dart';
+import '../helpers/error_helper.dart';
+/*import '../../services/app_sounds.dart';*/
 
 /// Widget para escaneo de guías en despacho en aduana
 class CustomsDispatchScanBox extends StatefulWidget {
@@ -18,8 +23,8 @@ class CustomsDispatchScanBox extends StatefulWidget {
 class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  final Set<String> _scannedGuides = {};
   final ScanController _scanController = ScanController();
+  final List<String> _scannedGuides = [];
 
   @override
   void initState() {
@@ -29,61 +34,10 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
 
   @override
   void dispose() {
-    _focusNode.dispose();
     _controller.dispose();
+    _focusNode.dispose();
     _scanController.dispose();
     super.dispose();
-  }
-
-  Future<void> _handleGuideInput(String? guide) async {
-    if (guide == null || guide.isEmpty) return;
-
-    final cleanGuide = guide.trim();
-    if (cleanGuide.isEmpty) return;
-
-    // Usar el controlador de escaneo para procesar la guía
-    await _scanController.processScan(() async {
-      // Agregar la guía escaneada directamente - el backend validará
-      setState(() {
-        _scannedGuides.add(cleanGuide);
-      });
-      SystemSound.play(SystemSoundType.click);
-      _controller.clear();
-      // Mantener el foco
-      Future.microtask(() {
-        if (!_focusNode.hasFocus) {
-          _focusNode.requestFocus();
-        }
-      });
-    });
-  }
-
-  Future<void> _complete({required bool createCube}) async {
-    if (_scannedGuides.isEmpty) return;
-
-    // Procesar todas las guías en un solo request
-    final guides = _scannedGuides.toList();
-
-    // Llamar al callback
-    widget.onComplete(guides, createCube);
-
-    // Limpiar la lista de guías escaneadas
-    setState(() {
-      _scannedGuides.clear();
-    });
-
-    // Mantener el foco del escáner
-    Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
-    });
-  }
-
-  void _removeGuide(String guide) {
-    setState(() {
-      _scannedGuides.remove(guide);
-    });
   }
 
   @override
@@ -103,85 +57,162 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Campo de entrada
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 128)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Escanee o ingrese el código de la guía',
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: InputBorder.none,
-                suffixIcon: Icon(
-                  Icons.qr_code_scanner,
-                  color: theme.colorScheme.primary.withValues(alpha: 128),
-                ),
-              ),
-              onChanged: (value) {
-                if (value.endsWith('\n')) {
-                  _handleGuideInput(value.replaceAll('\n', ''));
-                }
-              },
-              onSubmitted: _handleGuideInput,
-            ),
-          ),
-
+          _buildScanField(theme),
           if (_scannedGuides.isNotEmpty) ...[
             const SizedBox(height: 16),
-
-            // Botones de acción
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => _complete(createCube: true),
-                icon: const Icon(Icons.add_box),
-                label: Text('Crear Cubo (${_scannedGuides.length} guías)'),
-              ),
-            ),
-
+            _buildCreateCubeButton(),
             const SizedBox(height: 16),
-
-            // Lista de guías escaneadas
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200),
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final guidesList = _scannedGuides.toList().reversed.toList();
-                    return ListView.separated(
-                      padding: const EdgeInsets.all(8),
-                      shrinkWrap: true,
-                      itemCount: guidesList.length,
-                      separatorBuilder: (context, index) => const Divider(),
-                      itemBuilder: (context, index) {
-                        final guide = guidesList[index];
-                        return ListTile(
-                          leading: const Icon(Icons.inventory_2_outlined),
-                          title: Text(guide),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.remove_circle_outline),
-                            color: Colors.red,
-                            onPressed: () => _removeGuide(guide),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
+            _buildGuidesList(),
           ],
         ],
       ),
     );
+  }
+
+  Widget _buildScanField(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 128)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: 'Escanee o ingrese el código de la guía',
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: InputBorder.none,
+          suffixIcon: Icon(
+            Icons.qr_code_scanner,
+            color: theme.colorScheme.primary.withValues(alpha: 128),
+          ),
+        ),
+        onChanged: (value) {
+          if (value.endsWith('\n')) {
+            _handleGuideInput(value.replaceAll('\n', ''));
+          }
+        },
+        onSubmitted: _handleGuideInput,
+      ),
+    );
+  }
+
+  Widget _buildCreateCubeButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: () => _complete(createCube: true),
+        icon: const Icon(Icons.add_box),
+        label: Text('Crear Cubo (${_scannedGuides.length} guías)'),
+      ),
+    );
+  }
+
+  Widget _buildGuidesList() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 400),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(8),
+        shrinkWrap: true,
+        itemCount: _scannedGuides.length,
+        itemBuilder: (context, index) {
+          final guide = _scannedGuides[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildGuideCard(guide),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildGuideCard(String guide) {
+    return ListTile(
+      leading: const Icon(Icons.inventory_2_outlined),
+      title: Text(guide),
+      trailing: IconButton(
+        icon: const Icon(Icons.remove_circle_outline),
+        color: Colors.red,
+        onPressed: () => _removeGuide(guide),
+      ),
+    );
+  }
+
+  Future<void> _handleGuideInput(String? guide) async {
+    if (guide == null || guide.isEmpty) return;
+
+    final cleanGuide = guide.trim();
+    if (cleanGuide.isEmpty) return;
+
+    await _scanController.processScan(() async {
+      try {
+        final validationProvider = context.read<GuideValidationProvider>();
+        final req = ValidateGuideStatusByProcessRequest(
+          guideCode: cleanGuide,
+          processInformation: ValidateGuideProcessType.toRegisterCube,
+        );
+        
+        final resp = await validationProvider.validateGuideStatusByProcess(req);
+        
+        if (resp.isSuccessful && (resp.content?.isValid ?? false)) {
+          setState(() {
+            // Insertar al inicio para que la guía más reciente aparezca primero
+            _scannedGuides.insert(0, cleanGuide);
+          });
+          /*await AppSounds.success();*/
+          
+          if (!mounted) return;
+          if (resp.message?.isNotEmpty ?? false) {
+            MessageHelper.showIconSnackBar(
+              context,
+              message: resp.message!,
+              isSuccess: true,
+            );
+          }
+        } else {
+          /*await AppSounds.error();*/
+          if (!mounted) return;
+          
+          MessageHelper.showIconSnackBar(
+            context,
+            message: resp.messageDetail ?? '',
+            isSuccess: false,
+          );
+        }
+      } finally {
+        if (mounted) {
+          _controller.clear();
+          Future.microtask(() {
+            if (!_focusNode.hasFocus) {
+              _focusNode.requestFocus();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _complete({required bool createCube}) async {
+    if (_scannedGuides.isEmpty) return;
+
+    final guides = List<String>.from(_scannedGuides);
+    widget.onComplete(guides, createCube);
+
+    setState(() {
+      _scannedGuides.clear();
+    });
+
+    Future.microtask(() {
+      if (!_focusNode.hasFocus) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  void _removeGuide(String guide) {
+    setState(() {
+      _scannedGuides.remove(guide);
+    });
   }
 }

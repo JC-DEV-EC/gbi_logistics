@@ -4,6 +4,7 @@ import '../controllers/scan_controller.dart';
 import '../../providers/guide_validation_provider.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../helpers/error_helper.dart';
 
 /// Widget para escaneo y validación de guías
 class GuideValidationScanBox extends StatefulWidget {
@@ -57,8 +58,6 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
 
       if (!mounted) return;
 
-      // Capturar messenger antes de los awaits para evitar usar context tras async gaps
-      final messenger = ScaffoldMessenger.of(context);
       final provider = context.read<GuideValidationProvider>();
       final response = await provider.validateGuideForCube(
         guideCode: cleanGuide,
@@ -81,23 +80,17 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
       }
 
       // Mostrar mensaje del backend
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            isValid 
-                ? (response.message ?? '')
-                : (response.messageDetail ?? ''),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          backgroundColor: isValid ? Colors.green : Colors.red,
-          duration: Duration(seconds: isValid ? 3 : 6),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(8),
-        ),
-      );
+      final message = isValid 
+          ? (response.message ?? '')
+          : (response.messageDetail ?? '');
+      
+      if (message.isNotEmpty) {
+        MessageHelper.showIconSnackBar(
+          context,
+          message: message,
+          isSuccess: isValid,
+        );
+      }
 
       // Limpiar input
       _controller.clear();

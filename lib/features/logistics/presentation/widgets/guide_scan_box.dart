@@ -4,7 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
-import '../../services/app_sounds.dart';
+/*import '../../services/app_sounds.dart';*/
+import '../helpers/error_helper.dart';
 
 /// Widget minimalista para escaneo de guías
 class GuideScanBox extends StatefulWidget {
@@ -68,7 +69,6 @@ class _GuideScanBoxState extends State<GuideScanBox> {
 
   /// Procesa el ingreso de una guía
   Future<void> _handleGuideInput(String? guide) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     if (guide == null || guide.isEmpty) return;
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
@@ -94,42 +94,37 @@ class _GuideScanBoxState extends State<GuideScanBox> {
                   _scannedGuides.add(cleanGuide);
                   _canComplete = _scannedGuides.isNotEmpty;
                 });
-                await AppSounds.success();
+                /*await AppSounds.success();*/
                 widget.onChanged?.call(_scannedGuides.toList());
               } else {
-                scaffoldMessenger.showSnackBar(
-                  SnackBar(
-                    content: Text(response.messageDetail ?? ''),
-                    backgroundColor: Colors.blue,
-                  ),
-                );
+              MessageHelper.showIconSnackBar(
+                context,
+                message: response.messageDetail ?? '',
+                isSuccess: true,
+              );
               }
               _controller.clear();
             } else {
               HapticFeedback.heavyImpact();
-              await AppSounds.error();
+              /*await AppSounds.error();*/
 
               if (!mounted) return;
-              scaffoldMessenger.showSnackBar(
-                SnackBar(
-                  content: Text(response.messageDetail ?? ''),
-                  backgroundColor: Colors.orange,
-                  duration: const Duration(seconds: 3),
-                ),
+              MessageHelper.showIconSnackBar(
+                context,
+                message: response.messageDetail ?? '',
+                isSuccess: false,
               );
             }
           } else {
             HapticFeedback.heavyImpact();
-            await AppSounds.error();
+            /*await AppSounds.error();*/
 
             if (!mounted) return;
-            scaffoldMessenger.showSnackBar(
-              SnackBar(
-                content: Text(response.messageDetail ?? ''),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
-              ),
-            );
+              MessageHelper.showIconSnackBar(
+                context,
+                message: response.messageDetail ?? '',
+                isSuccess: false,
+              );
           }
         } else {
           // Sin validación contra backend, solo expectedGuides
@@ -143,12 +138,12 @@ class _GuideScanBoxState extends State<GuideScanBox> {
             widget.onChanged?.call(_scannedGuides.toList());
           } else if (cleanGuide.length >= 9) {
             HapticFeedback.heavyImpact();
-            await AppSounds.error();
+            /*await AppSounds.error();*/
           }
         }
       } catch (_) {
         if (mounted) {
-          await AppSounds.error();
+          /*await AppSounds.error();*/
           // No mostrar mensajes locales; el backend debe proveer messageDetail
         }
       } finally {

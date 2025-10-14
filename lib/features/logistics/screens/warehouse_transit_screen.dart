@@ -15,6 +15,7 @@ import '../models/transport_cube_state.dart';
 // Presentation
 import '../presentation/constants/visual_states.dart';
 import '../presentation/widgets/app_drawer.dart';
+import '../presentation/helpers/error_helper.dart';
 
 // Screens
 import 'transport_cube_list_screen.dart';
@@ -59,7 +60,6 @@ class WarehouseTransitScreen extends StatelessWidget {
   }
 
   Future<void> _showSendToReceptionDialog(BuildContext context) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final provider = context.read<TransportCubeProvider>();
     final auth = context.read<AuthProvider>();
     final transportProvider = context.read<TransportCubeProvider>();
@@ -136,30 +136,19 @@ class WarehouseTransitScreen extends StatelessWidget {
 
         if (!guidesUpdate.isSuccessful) {
           if (!context.mounted) return;
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                guidesUpdate.messageDetail ??
-                    'Error actualizando guías a Tránsito',
-              ),
-              backgroundColor: Colors.red,
-            ),
+          MessageHelper.showIconSnackBar(
+            context,
+            message: guidesUpdate.messageDetail ?? 'Error actualizando guías a Tránsito',
+            isSuccess: false,
           );
           return;
         }
 
         if (context.mounted) {
-          scaffoldMessenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                guidesUpdate.message ??
-                    'Guías actualizadas a Tránsito',
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(8),
-            ),
+          MessageHelper.showIconSnackBar(
+            context,
+            message: guidesUpdate.message ?? 'Guías actualizadas a Tránsito',
+            isSuccess: true,
           );
         }
       }
@@ -180,36 +169,24 @@ class WarehouseTransitScreen extends StatelessWidget {
         await transportProvider.loadCubes(); // Recargar lista de cubos
 
         if (!context.mounted) return;
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              response.message ??
-                  '$cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(8),
-          ),
+        MessageHelper.showIconSnackBar(
+          context,
+          message: response.message ?? '$cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
+          isSuccess: true,
         );
       } else {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              response.messageDetail ??
-                  'Error al cambiar estado de cubos a Sent',
-            ),
-            backgroundColor: Colors.red,
-          ),
+        MessageHelper.showIconSnackBar(
+          context,
+          message: response.messageDetail ?? 'Error al cambiar estado de cubos a Sent',
+          isSuccess: false,
         );
       }
     } catch (e) {
       if (context.mounted) {
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-          ),
+        MessageHelper.showIconSnackBar(
+          context,
+          message: e.toString(),
+          isSuccess: false,
         );
       }
     }

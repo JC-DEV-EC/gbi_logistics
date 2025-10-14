@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/visual_states.dart';
+import '../helpers/error_helper.dart';
 
 /// Widget para escanear guías con verificación
 class GuideScannerDialog extends StatefulWidget {
@@ -65,31 +66,28 @@ class _GuideScannerDialogState extends State<GuideScannerDialog> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+    MessageHelper.showIconSnackBar(
+      context,
+      message: message,
+      isSuccess: false,
     );
   }
 
   void _showWarning(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.orange,
-      ),
+    MessageHelper.showIconSnackBar(
+      context,
+      message: message,
+      isSuccess: false,
     );
   }
 
   void _showSuccess(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+    MessageHelper.showIconSnackBar(
+      context,
+      message: message,
+      isSuccess: true,
     );
   }
 

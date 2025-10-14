@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:logiruta/core/services/app_logger.dart';
 
 import '../../models/operation_models.dart';
+import '../../models/validate_guide_models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/guide_validation_provider.dart';
 import '../../providers/guide_provider.dart';
-import '../../services/app_sounds.dart';
 import '../controllers/scan_controller.dart';
+import '../../services/guide_details_service.dart';
+import '../helpers/error_helper.dart';
 
 /// Widget para escaneo de guías en despacho a cliente
 class ClientDispatchScanBox extends StatefulWidget {
@@ -35,53 +39,43 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
     super.dispose();
   }
 
-  /// Procesa en lote las guías seleccionadas
   Future<void> _processBatchGuides(GuideProvider provider) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    if (!await _canProcessGuides(provider)) return;
+
+    final stopwatch = Stopwatch()..start();
+    AppLogger.log('[PERFORMANCE] Iniciando procesamiento por lotes', source: 'ClientDispatchScanBox');
     if (!mounted) return;
 
     final selectedGuides = provider.selectedGuides.toList();
 
     if (provider.selectedSubcourierId == null) {
-      await AppSounds.error();
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('Por favor seleccione un subcourier'),
-          backgroundColor: Colors.red,
-        ),
+      MessageHelper.showIconSnackBar(
+        context,
+        message: 'Por favor seleccione un subcourier',
+        isSuccess: false,
       );
       return;
     }
 
     final auth = context.read<AuthProvider>();
-    final selectedSub = auth.subcouriers.firstWhere(
-          (s) => s.id == provider.selectedSubcourierId,
-    );
+    final selectedSub = auth.subcouriers.firstWhere((s) => s.id == provider.selectedSubcourierId);
 
     final currentGuides = provider.guides;
-    final selectedGuideInfos = currentGuides
-        .where((g) => selectedGuides.contains(g.code))
-        .toList();
+    final selectedGuideInfos = currentGuides.where((g) => selectedGuides.contains(g.code)).toList();
 
     final mismatches = selectedGuideInfos
-        .where((g) =>
-    (g.subcourierName ?? '').trim() != (selectedSub.name ?? '').trim())
+        .where((g) => (g.subcourierName ?? '').trim() != (selectedSub.name ?? '').trim())
         .toList();
 
     if (mismatches.isNotEmpty) {
       final sample = mismatches.take(3).map((g) => g.code).join(', ');
-      final extra =
-      mismatches.length > 3 ? ' y ${mismatches.length - 3} más' : '';
+      final extra = mismatches.length > 3 ? ' y ${mismatches.length - 3} más' : '';
       if (!mounted) return;
 
-      await AppSounds.error();
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content:
-          Text('Las guías $sample$extra pertenecen a otro subcourier'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
+      MessageHelper.showIconSnackBar(
+        context,
+        message: 'Las guías $sample$extra pertenecen a otro subcourier',
+        isSuccess: false,
       );
       return;
     }
@@ -92,118 +86,264 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         guides: selectedGuides,
       );
 
+      AppLogger.log('[PERFORMANCE] Iniciando dispatchToClient', source: 'ClientDispatchScanBox');
       final response = await provider.dispatchToClient(request);
+      AppLogger.log('[PERFORMANCE] dispatchToClient completado en ${stopwatch.elapsedMilliseconds}ms', source: 'ClientDispatchScanBox');
+
       if (!mounted) return;
 
+      // Debug log para ver el estado de la respuesta
+      AppLogger.log('[DEBUG-RESPONSE] response.isSuccessful: ${response.isSuccessful}', source: 'ClientDispatchScanBox');
+      AppLogger.log('[DEBUG-RESPONSE] response object: $response', source: 'ClientDispatchScanBox');
+
       if (response.isSuccessful) {
-        await AppSounds.success();
-        if (!mounted) return;
+        // Debug log para ver qué mensaje llega
+        AppLogger.log('[DEBUG-SUCCESS] response.message: "${response.message}"', source: 'ClientDispatchScanBox');
+        AppLogger.log('[DEBUG-SUCCESS] response.messageDetail: "${response.messageDetail}"', source: 'ClientDispatchScanBox');
         
-        if ((response.message ?? '').isNotEmpty) {
-          _showMessage(context, response.message!, false);
-        }
+        // Mostrar mensaje de éxito del backend o mensaje por defecto
+        final successMessage = (response.message ?? '').isNotEmpty 
+            ? response.message! 
+            : 'Guías despachadas exitosamente';
+        AppLogger.log('[DEBUG-SUCCESS] successMessage to show: "$successMessage"', source: 'ClientDispatchScanBox');
+        _showMessage(context, successMessage, false);
 
         final dispatchedSet = selectedGuides.toSet();
         provider.clearSelectedGuides();
 
-        final remaining = provider.guides
-            .where((g) => !dispatchedSet.contains(g.code))
-            .toList();
+        final remaining = provider.guides.where((g) => !dispatchedSet.contains(g.code)).toList();
         provider.setGuides(remaining);
+        
+        // Desbloquear selectores y resetear selecciones para permitir nuevo proceso
+        provider.unlockSelectors();
+        provider.resetSelections();
       } else {
         HapticFeedback.heavyImpact();
-        await AppSounds.error();
         final errorMessage = response.messageDetail ?? '';
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 10),
-          ),
+        MessageHelper.showIconSnackBar(
+          context,
+          message: errorMessage,
+          isSuccess: false,
         );
       }
     } catch (e) {
       if (!mounted) return;
-      await AppSounds.error();
     }
   }
 
-  /// Maneja la entrada de guías individuales
+  Future<bool> _canProcessGuides(GuideProvider provider) async {
+    if (!mounted || provider.selectedGuides.isEmpty) return false;
+
+    try {
+      final validationProvider = context.read<GuideValidationProvider>();
+
+      final firstGuide = provider.selectedGuides.first;
+
+      final request = ValidateGuideStatusByProcessRequest(
+        guideCode: firstGuide,
+        subcourierId: provider.selectedSubcourierId,
+        clientId: provider.selectedClientId,
+        processInformation: ValidateGuideProcessType.toDispatchToClient,
+      );
+
+      final response = await validationProvider.validateGuideStatusByProcess(request);
+
+      if (response.messageDetail != null && response.messageDetail!.isNotEmpty) {
+        if (!mounted) return false;
+
+        MessageHelper.showIconSnackBar(
+          context,
+          message: response.messageDetail!,
+          isSuccess: false,
+        );
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      AppLogger.error('Error validando procesamiento', error: e, source: 'ClientDispatchScanBox');
+      return false;
+    }
+  }
+
   void _showMessage(BuildContext context, String message, bool isError) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14),
-        ),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(8),
-      ),
+    MessageHelper.showIconSnackBar(
+      context,
+      message: message,
+      isSuccess: !isError,
     );
   }
 
   Future<void> _handleGuideInput(String? guide, GuideProvider provider) async {
     if (!mounted) return;
 
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    if (guide == null || guide.isEmpty) return;
-
-    final cleanGuide = guide.trim();
+    final cleanGuide = guide?.trim() ?? '';
     if (cleanGuide.isEmpty) return;
+
+    // Validar que se puedan realizar escaneos
+    if (!provider.canStartScanning) {
+      String message;
+      if (provider.selectedSubcourierId == null) {
+        message = 'Seleccione un subcourier antes de escanear';
+      } else if (provider.requiresClient && provider.selectedClientId == null) {
+        message = 'Seleccione un cliente antes de escanear';
+      } else {
+        message = 'Complete la selección de subcourier y cliente';
+      }
+      
+      MessageHelper.showIconSnackBar(
+        context,
+        message: message,
+        isSuccess: false,
+      );
+      _controller.clear();
+      return;
+    }
 
     await _scanController.processScan(() async {
       try {
-        final currentGuides = provider.guides;
-        final localMatch =
-        currentGuides.where((g) => g.code == cleanGuide).toList();
+        final detailsService = context.read<GuideDetailsService>();
+        final detailsResponse = await detailsService.getGuideDetails(cleanGuide);
 
-        if (localMatch.isNotEmpty) {
-          await AppSounds.success();
+        if (detailsResponse.isSuccessful && detailsResponse.content != null) {
+          final details = detailsResponse.content!;
+          final selectedSubName = context
+              .read<AuthProvider>()
+              .subcouriers
+              .firstWhere((s) => s.id == provider.selectedSubcourierId)
+              .name ??
+              '';
+
+          if (details.subcourierName?.trim() != selectedSubName.trim()) {
+            MessageHelper.showIconSnackBar(
+              context,
+              message: 'La guía pertenece a ${details.subcourierName}, no a $selectedSubName',
+              isSuccess: false,
+            );
+            _controller.clear();
+            return;
+          }
+
+          // Validar estado de la guía ANTES de agregar a pantalla
+          final validationProvider = context.read<GuideValidationProvider>();
+          final validationRequest = ValidateGuideStatusByProcessRequest(
+            guideCode: cleanGuide,
+            subcourierId: provider.selectedSubcourierId,
+            clientId: provider.selectedClientId,
+            processInformation: ValidateGuideProcessType.toDispatchToClient,
+          );
+          
+          final validationResponse = await validationProvider.validateGuideStatusByProcess(validationRequest);
+          
+          // Debug logs
+          AppLogger.log('[DEBUG] validationResponse.isSuccessful: ${validationResponse.isSuccessful}', source: 'ClientDispatchScanBox');
+          AppLogger.log('[DEBUG] validationResponse.content: ${validationResponse.content}', source: 'ClientDispatchScanBox');
+          AppLogger.log('[DEBUG] validationResponse.content?.isValid: ${validationResponse.content?.isValid}', source: 'ClientDispatchScanBox');
+          AppLogger.log('[DEBUG] validationResponse.messageDetail: ${validationResponse.messageDetail}', source: 'ClientDispatchScanBox');
+          
+          final isValidState = validationResponse.isSuccessful && validationResponse.content?.isValid == true;
+          
+          if (!isValidState) {
+            HapticFeedback.heavyImpact();
+            _showMessage(
+              context,
+              validationResponse.messageDetail ?? validationResponse.content?.message ?? 'Error al validar la guía',
+              true,
+            );
+            _controller.clear();
+            return;
+          }
+
           provider.updateGuideUiState(cleanGuide, 'scanned');
+          
+          // Bloquear selectores después del primer escaneo exitoso
+          if (!provider.selectorsLocked) {
+            provider.lockSelectors();
+          }
+
+          if (!provider.guides.any((g) => g.code == details.guideCode)) {
+            final guideInfo = GuideInfo(
+              code: details.guideCode,
+              subcourierName: details.subcourierName,
+              packages: details.packages,
+              stateLabel: details.stateLabel,
+              updateDateTime: details.updateDateTime,
+            );
+
+            final newGuides = List<GuideInfo>.from(provider.guides);
+            newGuides.insert(0, guideInfo);
+            provider.setGuides(newGuides);
+          }
+
+          _showMessage(context, 'Guía escaneada correctamente', false);
+
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
           }
-          if (!mounted) return;
+
           _controller.clear();
           return;
         }
 
-        final selectedState = context
-            .read<GuideProvider>()
-            .clientDispatchFilterState;
+        final validationProvider = context.read<GuideValidationProvider>();
+        final validationRequest = ValidateGuideStatusByProcessRequest(
+          guideCode: cleanGuide,
+          subcourierId: provider.selectedSubcourierId,
+          clientId: provider.selectedClientId,
+          processInformation: ValidateGuideProcessType.toDispatchToClient,
+        );
+
+        final validationResponse = await validationProvider.validateGuideStatusByProcess(validationRequest);
+        
+        // Debug logs - segundo flujo
+        AppLogger.log('[DEBUG-2] validationResponse.isSuccessful: ${validationResponse.isSuccessful}', source: 'ClientDispatchScanBox');
+        AppLogger.log('[DEBUG-2] validationResponse.content: ${validationResponse.content}', source: 'ClientDispatchScanBox');
+        AppLogger.log('[DEBUG-2] validationResponse.content?.isValid: ${validationResponse.content?.isValid}', source: 'ClientDispatchScanBox');
+        AppLogger.log('[DEBUG-2] validationResponse.messageDetail: ${validationResponse.messageDetail}', source: 'ClientDispatchScanBox');
+        
+        final isValidState = validationResponse.isSuccessful && validationResponse.content?.isValid == true;
+
+        if (!isValidState) {
+          HapticFeedback.heavyImpact();
+          _showMessage(
+            context,
+            validationResponse.messageDetail ?? validationResponse.content?.message ?? 'Error al validar la guía',
+            true,
+          );
+          return;
+        }
+
         final response = await provider.searchGuide(
           cleanGuide,
-          status: selectedState,
+          status: TrackingStateType.receivedInLocalWarehouse,
         );
 
         final exactMatch = response.content;
 
         if (response.isSuccessful && exactMatch != null) {
-          await AppSounds.success();
           provider.updateGuideUiState(cleanGuide, 'scanned');
+          
+          // Bloquear selectores después del primer escaneo exitoso
+          if (!provider.selectorsLocked) {
+            provider.lockSelectors();
+          }
+          
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
           }
-          
-          if (!mounted) return;
+
           if ((response.message ?? '').isNotEmpty) {
             _showMessage(context, response.message!, false);
           }
 
-          final newGuides = List<GuideInfo>.from(currentGuides);
-          newGuides.insert(0, exactMatch);
-          provider.setGuides(newGuides);
+          if (!provider.guides.any((g) => g.code == exactMatch.code)) {
+            provider.setGuides([exactMatch, ...provider.guides]);
+          }
         } else {
           HapticFeedback.heavyImpact();
-          if (!mounted) return;
-          await AppSounds.error();
-          if (!mounted) return;
           _showMessage(context, response.messageDetail ?? '', true);
         }
 
-        if (!mounted) return;
         _controller.clear();
 
         Future.microtask(() {
@@ -212,18 +352,13 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
           }
         });
       } catch (e) {
-        if (!mounted) return;
-        await AppSounds.error();
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Error al procesar la guía'),
-            backgroundColor: Colors.red,
-          ),
+        MessageHelper.showIconSnackBar(
+          context,
+          message: 'Error al procesar la guía',
+          isSuccess: false,
         );
       } finally {
-        if (mounted) {
-          _controller.clear();
-        }
+        _controller.clear();
       }
     });
   }
@@ -233,52 +368,55 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
     final theme = Theme.of(context);
     final provider = context.watch<GuideProvider>();
 
-    if (!_focusNode.hasFocus &&
-        MediaQuery.of(context).viewInsets.bottom == 0) {
+    if (!_focusNode.hasFocus && MediaQuery.of(context).viewInsets.bottom == 0) {
       Future.microtask(() => _focusNode.requestFocus());
     }
 
     Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
+      if (!_focusNode.hasFocus) _focusNode.requestFocus();
     });
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (provider.selectedGuides.isNotEmpty) ...[
+        if (provider.selectedGuides.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(bottom: 16),
+            margin: const EdgeInsets.symmetric(vertical: 8),
             child: FilledButton.icon(
               onPressed: () => _processBatchGuides(provider),
               icon: const Icon(Icons.check_circle_outline),
               label: Text('Procesar ${provider.selectedGuides.length} guías'),
             ),
           ),
-        ],
         Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 128),
+              color: provider.canStartScanning
+                  ? theme.colorScheme.primary.withOpacity(0.5)
+                  : theme.colorScheme.outline.withOpacity(0.3),
             ),
             borderRadius: BorderRadius.circular(8),
+            color: provider.canStartScanning
+                ? theme.colorScheme.surface
+                : theme.colorScheme.surfaceVariant.withOpacity(0.3),
           ),
           child: TextField(
             controller: _controller,
             focusNode: _focusNode,
-            autofocus: true,
+            autofocus: provider.canStartScanning,
+            enabled: provider.canStartScanning,
             decoration: InputDecoration(
-              hintText: 'Escanee o ingrese el código de la guía',
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+              hintText: provider.canStartScanning 
+                  ? 'Escanee o ingrese el código de la guía'
+                  : 'Seleccione subcourier${provider.requiresClient ? ' y cliente' : ''} para escanear',
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: InputBorder.none,
               suffixIcon: Icon(
-                Icons.qr_code_scanner,
-                color: theme.colorScheme.primary,
+                Icons.qr_code_scanner, 
+                color: provider.canStartScanning 
+                    ? theme.colorScheme.primary 
+                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
               ),
             ),
             onChanged: (value) {
@@ -289,6 +427,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             onSubmitted: (value) => _handleGuideInput(value, provider),
           ),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }

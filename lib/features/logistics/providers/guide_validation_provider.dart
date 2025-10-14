@@ -93,6 +93,20 @@ class GuideValidationProvider extends ChangeNotifier {
     }
   }
 
+  /// Validar estado de guía para cualquier proceso (proxy al servicio)
+  Future<ApiResponse<ValidateGuideStatusResponse>> validateGuideStatusByProcess(
+    ValidateGuideStatusByProcessRequest request,
+  ) async {
+    try {
+      return await _service.validateGuideStatusByProcess(request);
+    } catch (e) {
+      return ApiResponse(
+        isSuccessful: false,
+        messageDetail: e.toString(),
+      );
+    }
+  }
+
   /// Limpiar clientes
   void clearClients() {
     _clients = [];

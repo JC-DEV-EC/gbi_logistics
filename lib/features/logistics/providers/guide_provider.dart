@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:logiruta/core/services/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/models/api_response.dart';
-import '../../../core/services/app_logger.dart';
 import '../models/operation_models.dart';
 import '../services/guide_service.dart';
 
@@ -28,6 +28,9 @@ class GuideProvider extends ChangeNotifier {
   int _totalGuides = 0;
   final Map<String, String> _guideUiStates = {};
   int? _selectedSubcourierId;
+  String? _selectedClientId;
+  bool _requiresClient = false;
+  bool _selectorsLocked = false;
   final Set<String> _selectedGuides = {};
 
   // Estado actual del filtro en Despacho a Cliente
@@ -47,12 +50,53 @@ class GuideProvider extends ChangeNotifier {
   int get totalGuides => _totalGuides;
   Map<String, String> get guideUiStates => _guideUiStates;
   int? get selectedSubcourierId => _selectedSubcourierId;
+  String? get selectedClientId => _selectedClientId;
+  bool get requiresClient => _requiresClient;
+  bool get selectorsLocked => _selectorsLocked;
   Set<String> get selectedGuides => Set.unmodifiable(_selectedGuides);
   String get clientDispatchFilterState => _clientDispatchFilterState;
 
-  // Métodos de subcourier
+  // Métodos de subcourier y cliente
   void setSelectedSubcourier(int id) {
+    if (_selectorsLocked) return;
     _selectedSubcourierId = id;
+    notifyListeners();
+  }
+
+  void setSelectedClient(String? id) {
+    if (_selectorsLocked) return;
+    _selectedClientId = id;
+    notifyListeners();
+  }
+
+  void setRequiresClient(bool requires) {
+    _requiresClient = requires;
+    if (!requires) {
+      _selectedClientId = null;
+    }
+    notifyListeners();
+  }
+
+  void lockSelectors() {
+    _selectorsLocked = true;
+    notifyListeners();
+  }
+
+  void unlockSelectors() {
+    _selectorsLocked = false;
+    notifyListeners();
+  }
+
+  bool get canStartScanning {
+    final hasSubcourier = _selectedSubcourierId != null;
+    final hasClient = !_requiresClient || _selectedClientId != null;
+    return hasSubcourier && hasClient;
+  }
+
+  void resetSelections() {
+    _selectedSubcourierId = null;
+    _selectedClientId = null;
+    _requiresClient = false;
     notifyListeners();
   }
 
@@ -98,7 +142,11 @@ class GuideProvider extends ChangeNotifier {
     bool hideValidated = false,
     bool bypassLoadingGuard = false,
   }) async {
-try {
+    final stopwatch = Stopwatch()..start();
+    AppLogger.log('[PERFORMANCE] Iniciando loadGuides', source: 'GuideProvider');
+    
+    try {
+
       if (_isLoading && !bypassLoadingGuard) {
         AppLogger.log('Omitiendo carga: ya hay una en proceso', source: 'GuideProvider');
         return;
@@ -146,7 +194,9 @@ try {
       _errorNotifier.value = e.toString();
     } finally {
       _isLoading = false;
+      final totalGuides = _guides.length;
       notifyListeners();
+      AppLogger.log('[PERFORMANCE] loadGuides completado en ${stopwatch.elapsedMilliseconds}ms. Guías cargadas: $totalGuides', source: 'GuideProvider');
     }
   }
 
@@ -241,23 +291,24 @@ try {
       _lastOperationSuccessful = false;
       notifyListeners();
 
+      final stopwatch = Stopwatch()..start();
+      AppLogger.log('[PERFORMANCE] Iniciando llamada a API dispatchToClient', source: 'GuideProvider');
       final response = await _guideService.dispatchToClient(request);
+      AppLogger.log('[PERFORMANCE] API dispatchToClient completada en ${stopwatch.elapsedMilliseconds}ms', source: 'GuideProvider');
 
-if (response.isSuccessful) {
+      if (response.isSuccessful) {
         _lastOperationSuccessful = true;
+        
+        // Remover las guías procesadas de la lista y limpiar sus estados
+        final processedGuides = request.guides.toSet();
+        _guides.removeWhere((guide) => processedGuides.contains(guide.code));
         for (final guide in request.guides) {
           _guideUiStates.remove(guide);
           _selectedGuides.remove(guide);
         }
-        _selectedSubcourierId = null;
-
-        await loadGuides(
-          page: 1,
-          pageSize: 50,
-          status: 'ReceivedInLocalWarehouse',
-          hideValidated: false,
-          bypassLoadingGuard: true,
-        );
+        
+        // NO limpiar selección de subcourier aquí para evitar problemas de contexto
+        // Se limpiará en ClientDispatchScanBox después de mostrar el mensaje
       } else if (response.messageDetail?.contains('sesión ha expirado') ?? false) {
         _guides.clear();
         _guideUiStates.clear();
@@ -272,6 +323,8 @@ if (response.isSuccessful) {
         messageDetail: _errorNotifier.value,
       );
     } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -279,6 +332,8 @@ if (response.isSuccessful) {
   // Métodos de estado UI
   // -----------------------------
   Future<void> updateGuideUiState(String guideCode, String state) async {
+    final stopwatch = Stopwatch()..start();
+    AppLogger.log('[PERFORMANCE] Iniciando updateGuideUiState para guía $guideCode', source: 'GuideProvider');
     try {
       final prefs = await SharedPreferences.getInstance();
       final validatedGuides = Set<String>.from(
@@ -314,6 +369,7 @@ if (response.isSuccessful) {
       );
 
       notifyListeners();
+      AppLogger.log('[PERFORMANCE] updateGuideUiState completado en ${stopwatch.elapsedMilliseconds}ms', source: 'GuideProvider');
     } catch (e) {
       AppLogger.error('Error actualizando estado', error: e, source: 'GuideProvider');
     }
@@ -388,8 +444,15 @@ if (response.isSuccessful) {
 
       final response = await _guideService.updateGuideStatus(request);
 
+      // Importante: no propagar errores a un canal global aquí.
+      // Las pantallas que llaman a esta operación deben manejar sus mensajes localmente
+      // para evitar que mensajes de otros flujos (p. ej. Recepción) aparezcan en
+      // pantallas no relacionadas (p. ej. Despacho a Cliente).
       if (!response.isSuccessful) {
-        _errorNotifier.value = response.messageDetail;
+        AppLogger.log(
+          'updateGuideStatus failed: \'${response.messageDetail ?? ''}\'',
+          source: 'GuideProvider',
+        );
       }
 
       return response;

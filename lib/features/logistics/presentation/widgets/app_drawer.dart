@@ -83,9 +83,38 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('Cerrar Sesión'),
-            onTap: () {
-              auth.logout();
-              Navigator.pushReplacementNamed(context, '/login');
+            onTap: () async {
+              // Mostrar diálogo de confirmación
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Cerrar Sesión'),
+                  content: const Text('¿Estás seguro que deseas cerrar sesión?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Cerrar Sesión'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed ?? false) {
+                // Cerrar el drawer
+                Navigator.pop(context);
+                // Cerrar sesión y limpiar credenciales
+                await auth.logout();
+                // Navegar al login reemplazando toda la pila de navegación
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/login',
+                  (route) => false, // Esto elimina todas las rutas anteriores
+                );
+              }
             },
           ),
         ],
