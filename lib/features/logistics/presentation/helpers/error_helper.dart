@@ -44,7 +44,7 @@ class MessageHelper {
         backgroundColor: const Color(0xFF4CAF50),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -138,7 +138,7 @@ class MessageHelper {
         backgroundColor: const Color(0xFFE53E3E),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 5),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -179,7 +179,7 @@ class MessageHelper {
         backgroundColor: const Color(0xFFFF9800),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -192,8 +192,14 @@ class MessageHelper {
   static void showIconSnackBar(BuildContext context, {
     required String message,
     required bool isSuccess,
+    Duration? successDuration,
+    Duration? errorDuration,
   }) {
     if (message.isEmpty) return;
+
+    final duration = isSuccess 
+        ? (successDuration ?? const Duration(seconds: 4))
+        : (errorDuration ?? const Duration(seconds: 5));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -224,8 +230,8 @@ class MessageHelper {
             ? const Color(0xFF4CAF50) 
             : const Color(0xFFE53E3E),
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: isSuccess ? 4 : 5),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        duration: duration,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -266,10 +272,76 @@ class MessageHelper {
         backgroundColor: const Color(0xFF2196F3),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  /// Muestra un diálogo de error bloqueante que impide operaciones hasta que el usuario lo acepte
+  static Future<void> showBlockingErrorDialog(BuildContext context, String message) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false, // No se puede cerrar tocando fuera
+      builder: (context) => PopScope(
+        canPop: false, // Evita que se cierre con el botón Atrás
+        child: AlertDialog(
+          backgroundColor: const Color(0xFFFFEBEE),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(
+              color: Color(0xFFE53E3E),
+              width: 2,
+            ),
+          ),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Color(0xFFD32F2F),
+                size: 32,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Error',
+                  style: TextStyle(
+                    color: Color(0xFFD32F2F),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Color(0xFF5D4037),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFE53E3E),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Continuar',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

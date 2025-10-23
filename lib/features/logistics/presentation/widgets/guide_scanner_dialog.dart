@@ -88,6 +88,7 @@ class _GuideScannerDialogState extends State<GuideScannerDialog> {
       context,
       message: message,
       isSuccess: true,
+      successDuration: const Duration(milliseconds: 750),
     );
   }
 

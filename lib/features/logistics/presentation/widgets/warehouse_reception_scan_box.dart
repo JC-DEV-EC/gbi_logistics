@@ -126,6 +126,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
           context,
           message: response.message ?? 'Guía recibida correctamente',
           isSuccess: true,
+          successDuration: const Duration(milliseconds: 750),
         );
 
         // Notificar cambio

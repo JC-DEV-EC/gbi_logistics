@@ -166,11 +166,12 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
     }
   }
 
-  void _showMessage(BuildContext context, String message, bool isError) {
+  void _showMessage(BuildContext context, String message, bool isError, [Duration? successDuration]) {
     MessageHelper.showIconSnackBar(
       context,
       message: message,
       isSuccess: !isError,
+      successDuration: !isError ? successDuration : null,
     );
   }
 
@@ -275,7 +276,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             provider.setGuides(newGuides);
           }
 
-          _showMessage(context, 'Guía escaneada correctamente', false);
+          _showMessage(context, 'Guía escaneada correctamente', false, const Duration(milliseconds: 750));
 
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);

@@ -145,11 +145,12 @@ class WarehouseTransitScreen extends StatelessWidget {
         }
 
         if (context.mounted) {
-          MessageHelper.showIconSnackBar(
-            context,
-            message: guidesUpdate.message ?? 'Guías actualizadas a Tránsito',
-            isSuccess: true,
-          );
+        MessageHelper.showIconSnackBar(
+          context,
+          message: guidesUpdate.message ?? 'Guías actualizadas a Tránsito',
+          isSuccess: true,
+          successDuration: const Duration(milliseconds: 750),
+        );
         }
       }
 
@@ -173,6 +174,7 @@ class WarehouseTransitScreen extends StatelessWidget {
           context,
           message: response.message ?? '$cubeCount ${cubeCount == 1 ? 'cubo enviado' : 'cubos enviados'} a Tránsito',
           isSuccess: true,
+          successDuration: const Duration(milliseconds: 750),
         );
       } else {
         MessageHelper.showIconSnackBar(

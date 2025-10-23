@@ -101,6 +101,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
                 context,
                 message: response.messageDetail ?? '',
                 isSuccess: true,
+                successDuration: const Duration(milliseconds: 750),
               );
               }
               _controller.clear();

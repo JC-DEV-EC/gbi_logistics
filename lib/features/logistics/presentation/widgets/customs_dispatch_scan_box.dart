@@ -5,7 +5,6 @@ import '../controllers/scan_controller.dart';
 import '../../models/validate_guide_models.dart';
 import '../../providers/guide_validation_provider.dart';
 import '../helpers/error_helper.dart';
-/*import '../../services/app_sounds.dart';*/
 
 /// Widget para escaneo de guías en despacho en aduana
 class CustomsDispatchScanBox extends StatefulWidget {
@@ -25,6 +24,7 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
   final List<String> _scannedGuides = [];
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -79,13 +79,18 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
         controller: _controller,
         focusNode: _focusNode,
         autofocus: true,
+        enabled: !_isBlocked, // Deshabilitar cuando está bloqueado
         decoration: InputDecoration(
-          hintText: 'Escanee o ingrese el código de la guía',
+          hintText: _isBlocked 
+              ? 'Presione Continuar en el diálogo de error'
+              : 'Escanee o ingrese el código de la guía',
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           border: InputBorder.none,
           suffixIcon: Icon(
             Icons.qr_code_scanner,
-            color: theme.colorScheme.primary.withValues(alpha: 128),
+            color: _isBlocked 
+                ? theme.colorScheme.outline
+                : theme.colorScheme.primary.withValues(alpha: 128),
           ),
         ),
         onChanged: (value) {
@@ -144,6 +149,21 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
 
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
+    
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
+    
+    // Verificar si la guía ya fue escaneada
+    if (_scannedGuides.contains(cleanGuide)) {
+      MessageHelper.showIconSnackBar(
+        context,
+        message: 'Esta guía ya fue agregada',
+        isSuccess: false,
+      );
+      _controller.clear();
+      _focusNode.requestFocus();
+      return;
+    }
 
     await _scanController.processScan(() async {
       try {
@@ -168,17 +188,28 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
               context,
               message: resp.message!,
               isSuccess: true,
+              successDuration: const Duration(milliseconds: 500),
             );
           }
         } else {
-          /*await AppSounds.error();*/
-          if (!mounted) return;
           
-          MessageHelper.showIconSnackBar(
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+          
+          // Mostrar diálogo bloqueante de error
+          await MessageHelper.showBlockingErrorDialog(
             context,
-            message: resp.messageDetail ?? '',
-            isSuccess: false,
+            resp.messageDetail ?? 'Error al validar la guía',
           );
+          
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
         }
       } finally {
         if (mounted) {

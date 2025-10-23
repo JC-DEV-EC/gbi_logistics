@@ -29,6 +29,8 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
+  final Set<String> _alreadyValidatedGuides = {};
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -49,6 +51,21 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
 
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
+    
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
+
+    // Verificar si la guía ya fue validada
+    if (_alreadyValidatedGuides.contains(cleanGuide)) {
+      MessageHelper.showIconSnackBar(
+        context,
+        message: 'Esta guía ya fue agregada',
+        isSuccess: false,
+      );
+      _controller.clear();
+      _focusNode.requestFocus();
+      return;
+    }
 
     // Usar el controlador de escaneo para procesar la guía
     await _scanController.processScan(() async {
@@ -73,23 +90,36 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
       // Reproducir sonido según resultado
       if (isValid) {
         SystemSound.play(SystemSoundType.click);
+        _alreadyValidatedGuides.add(cleanGuide);
         widget.onGuideValidated(cleanGuide);
+        
+        // Mostrar mensaje de éxito si existe
+        final message = response.message ?? '';
+        if (message.isNotEmpty) {
+          MessageHelper.showIconSnackBar(
+            context,
+            message: message,
+            isSuccess: true,
+            successDuration: const Duration(milliseconds: 500),
+          );
+        }
       } else {
-        SystemSound.play(SystemSoundType.alert);
-        HapticFeedback.heavyImpact();
-      }
-
-      // Mostrar mensaje del backend
-      final message = isValid 
-          ? (response.message ?? '')
-          : (response.messageDetail ?? '');
-      
-      if (message.isNotEmpty) {
-        MessageHelper.showIconSnackBar(
-          context,
-          message: message,
-          isSuccess: isValid,
-        );
+        
+        // Bloquear el scanner
+        setState(() {
+          _isBlocked = true;
+        });
+        
+        // Mostrar diálogo bloqueante de error
+        final errorMessage = response.messageDetail ?? 'Error al validar la guía';
+        await MessageHelper.showBlockingErrorDialog(context, errorMessage);
+        
+        // Desbloquear el scanner después de cerrar el diálogo
+        if (mounted) {
+          setState(() {
+            _isBlocked = false;
+          });
+        }
       }
 
       // Limpiar input
@@ -119,14 +149,17 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
         controller: _controller,
         focusNode: _focusNode,
         autofocus: true,
-        enabled: widget.selectedSubcourierId != null && 
+        enabled: !_isBlocked &&
+                widget.selectedSubcourierId != null && 
                 (!widget.requiresClient || widget.selectedClientId != null),
         decoration: InputDecoration(
-          hintText: widget.selectedSubcourierId == null
-              ? 'Seleccione un subcourier para habilitar el escaneo'
-              : (widget.requiresClient && widget.selectedClientId == null
-                  ? 'Seleccione un cliente para continuar'
-                  : 'Escanee o ingrese el código de la guía'),
+          hintText: _isBlocked
+              ? 'Presione Continuar en el diálogo de error'
+              : (widget.selectedSubcourierId == null
+                  ? 'Seleccione un subcourier para habilitar el escaneo'
+                  : (widget.requiresClient && widget.selectedClientId == null
+                      ? 'Seleccione un cliente para continuar'
+                      : 'Escanee o ingrese el código de la guía')),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 12,
@@ -134,9 +167,9 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
           border: InputBorder.none,
           suffixIcon: Icon(
             Icons.qr_code_scanner,
-            color: widget.selectedSubcourierId != null
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline,
+            color: _isBlocked || widget.selectedSubcourierId == null
+                ? theme.colorScheme.outline
+                : theme.colorScheme.primary,
           ),
         ),
         onChanged: (value) {

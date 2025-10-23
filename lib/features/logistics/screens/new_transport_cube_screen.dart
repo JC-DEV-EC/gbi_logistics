@@ -42,7 +42,6 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
 
   Future<void> _createNewCube(List<String> guides) async {
     final provider = context.read<TransportCubeProvider>();
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final response = await provider.createTransportCube(
@@ -60,54 +59,26 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
         Navigator.pop(context);
       }
 
-      final message = response.isSuccessful
-          ? (response.message ?? 'Operación exitosa')
-          : (response.messageDetail ?? 'Error en la operación');
-
-      MessageHelper.showIconSnackBar(
-        context,
-        message: message,
-        isSuccess: response.isSuccessful,
-      );
-    } catch (_) {
+      if (response.isSuccessful) {
+        final message = response.message ?? 'Operación exitosa';
+        MessageHelper.showIconSnackBar(
+          context,
+          message: message,
+          isSuccess: true,
+        );
+      } else {
+        // Mostrar diálogo bloqueante de error
+        await MessageHelper.showBlockingErrorDialog(
+          context,
+          response.messageDetail ?? 'Error al crear el cubo',
+        );
+      }
+    } catch (e) {
       if (!mounted) return;
-      MessageHelper.showIconSnackBar(
+      // Mostrar diálogo bloqueante de error
+      await MessageHelper.showBlockingErrorDialog(
         context,
-        message: 'Error al crear el cubo',
-        isSuccess: false,
-      );
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: const [
-              Icon(
-                Icons.error,
-                color: Colors.white,
-                size: 24,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Error al crear el cubo',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFE53E3E),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-          elevation: 6,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        'Error al crear el cubo: ${e.toString()}',
       );
     }
   }

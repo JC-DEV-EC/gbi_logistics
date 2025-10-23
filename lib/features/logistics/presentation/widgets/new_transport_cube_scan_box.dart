@@ -4,6 +4,7 @@ import '../../models/validate_guide_models.dart';
 import '../../providers/guide_validation_provider.dart';
 import '../../services/app_sounds.dart';
 import '../controllers/scan_controller.dart';
+import '../helpers/error_helper.dart';
 
 /// Widget para escaneo de guías en nuevo cubo de transporte
 class NewTransportCubeScanBox extends StatefulWidget {
@@ -23,6 +24,7 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
   final Set<String> _scannedGuides = {};
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -43,6 +45,9 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
 
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
+    
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
 
     await _scanController.processScan(() async {
       try {
@@ -74,16 +79,24 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
           // Notificar guías actualizadas
           widget.onComplete(_scannedGuides.toList());
         } else {
-          await AppSounds.error();
-          if (!mounted) return;
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(resp.messageDetail ?? ''),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
-            ),
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+          
+          // Mostrar diálogo bloqueante de error
+          await MessageHelper.showBlockingErrorDialog(
+            context,
+            resp.messageDetail ?? 'Error al validar la guía',
           );
+          
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
         }
       } finally {
         if (mounted) {
@@ -125,8 +138,11 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
             controller: _controller,
             focusNode: _focusNode,
             autofocus: true,
+            enabled: !_isBlocked, // Deshabilitar cuando está bloqueado
             decoration: InputDecoration(
-              hintText: 'Escanee o ingrese el código de la guía',
+              hintText: _isBlocked
+                  ? 'Presione Continuar en el diálogo de error'
+                  : 'Escanee o ingrese el código de la guía',
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
@@ -134,7 +150,9 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
-                color: theme.colorScheme.primary,
+                color: _isBlocked
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.primary,
               ),
             ),
             onChanged: (value) {
