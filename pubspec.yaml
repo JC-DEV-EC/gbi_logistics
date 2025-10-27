@@ -1,7 +1,7 @@
 name: logiruta
 description: LogiRuta - Gestión Logística Inteligente
 publish_to: 'none'
-version: 1.0.0+5  # Formato: version+buildNumber (se muestra como 1.0.0.5)
+version: 1.0.0+7  # Formato: version+buildNumber (se muestra como 1.0.0.6)
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

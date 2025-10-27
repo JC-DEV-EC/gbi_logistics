@@ -5,6 +5,7 @@ import '../../providers/guide_validation_provider.dart';
 import '../../services/app_sounds.dart';
 import '../controllers/scan_controller.dart';
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget para escaneo de guías en nuevo cubo de transporte
 class NewTransportCubeScanBox extends StatefulWidget {
@@ -60,13 +61,43 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
         final resp = await validationProvider.validateGuideStatusByProcess(req);
         
         if (resp.isSuccessful && (resp.content?.isValid ?? false)) {
+          if (!mounted) return;
+          
+          // Si hay userMessage (no null y no vacío), mostrar diálogo bloqueante ANTES de agregar la guía
+          final userMessage = resp.content?.userMessage;
+          if (userMessage != null && userMessage.isNotEmpty) {
+            // Sonido de error
+            NativeSoundService.playErrorSound();
+            
+            // Bloquear el scanner
+            setState(() {
+              _isBlocked = true;
+            });
+            
+            // Mostrar diálogo bloqueante amarillo con userMessage
+            await MessageHelper.showBlockingWarningDialog(
+              context,
+              userMessage,
+            );
+            
+            // Desbloquear el scanner después de cerrar el diálogo
+            if (mounted) {
+              setState(() {
+                _isBlocked = false;
+              });
+            }
+          }
+          
+          // Agregar la guía DESPUÉS de mostrar el mensaje (si había)
           setState(() {
             _scannedGuides.add(cleanGuide);
           });
           await AppSounds.success();
           
           if (!mounted) return;
-          if (resp.message?.isNotEmpty ?? false) {
+          
+          // Mostrar mensaje de éxito normal solo si NO había userMessage
+          if (resp.content?.userMessage == null && (resp.message?.isNotEmpty ?? false)) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(resp.message!),
@@ -79,6 +110,8 @@ class _NewTransportCubeScanBoxState extends State<NewTransportCubeScanBox> {
           // Notificar guías actualizadas
           widget.onComplete(_scannedGuides.toList());
         } else {
+          // Sonido de error nativo del sistema
+          NativeSoundService.playErrorSound();
           
           // Bloquear el scanner
           setState(() {

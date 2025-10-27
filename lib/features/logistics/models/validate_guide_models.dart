@@ -45,12 +45,14 @@ class ValidateGuideStatusResponse {
   final String? currentState;
   final String? requiredState;
   final String? message;
+  final String? userMessage;
 
   const ValidateGuideStatusResponse({
     required this.isValid,
     this.currentState,
     this.requiredState,
     this.message,
+    this.userMessage,
   });
 
   factory ValidateGuideStatusResponse.fromJson(Map<String, dynamic> json) {
@@ -59,6 +61,7 @@ class ValidateGuideStatusResponse {
       currentState: json['currentState'] as String?,
       requiredState: json['requiredState'] as String?,
       message: json['message'] as String?,
+      userMessage: json['userMessage'] as String?,
     );
   }
 }
@@ -85,6 +88,9 @@ class GetClientBySubcourierResponse {
 class ValidateGuideProcessType {
   /// Para registrar cubo
   static const String toRegisterCube = 'ToRegisterCube';
+  
+  /// Para registrar cubo de despacho a cliente
+  static const String toRegisterCubeToDispatch = 'ToRegisterCubeToDispatch';
   
   /// Para despachar en bodega
   static const String toDispatchToClient = 'ToDispatchToClient';

@@ -11,6 +11,7 @@ import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
 import '../../services/guide_details_service.dart';
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget para escaneo de guías en despacho a cliente
 class ClientDispatchScanBox extends StatefulWidget {
@@ -24,6 +25,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -100,10 +102,10 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         // Debug log para ver qué mensaje llega
         AppLogger.log('[DEBUG-SUCCESS] response.message: "${response.message}"', source: 'ClientDispatchScanBox');
         AppLogger.log('[DEBUG-SUCCESS] response.messageDetail: "${response.messageDetail}"', source: 'ClientDispatchScanBox');
-        
+
         // Mostrar mensaje de éxito del backend o mensaje por defecto
-        final successMessage = (response.message ?? '').isNotEmpty 
-            ? response.message! 
+        final successMessage = (response.message ?? '').isNotEmpty
+            ? response.message!
             : 'Guías despachadas exitosamente';
         AppLogger.log('[DEBUG-SUCCESS] successMessage to show: "$successMessage"', source: 'ClientDispatchScanBox');
         _showMessage(context, successMessage, false);
@@ -113,7 +115,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
 
         final remaining = provider.guides.where((g) => !dispatchedSet.contains(g.code)).toList();
         provider.setGuides(remaining);
-        
+
         // Desbloquear selectores y resetear selecciones para permitir nuevo proceso
         provider.unlockSelectors();
         provider.resetSelections();
@@ -183,23 +185,12 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
 
     // Validar que se puedan realizar escaneos
     if (!provider.canStartScanning) {
-      String message;
-      if (provider.selectedSubcourierId == null) {
-        message = 'Seleccione un subcourier antes de escanear';
-      } else if (provider.requiresClient && provider.selectedClientId == null) {
-        message = 'Seleccione un cliente antes de escanear';
-      } else {
-        message = 'Complete la selección de subcourier y cliente';
-      }
-      
-      MessageHelper.showIconSnackBar(
-        context,
-        message: message,
-        isSuccess: false,
-      );
       _controller.clear();
       return;
     }
+
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
 
     await _scanController.processScan(() async {
       try {
@@ -216,11 +207,23 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
               '';
 
           if (details.subcourierName?.trim() != selectedSubName.trim()) {
-            MessageHelper.showIconSnackBar(
+            // Error de subcourier no coincidente - usar diálogo bloqueante
+            NativeSoundService.playErrorSound();
+
+            setState(() {
+              _isBlocked = true;
+            });
+
+            await MessageHelper.showBlockingErrorDialog(
               context,
-              message: 'La guía pertenece a ${details.subcourierName}, no a $selectedSubName',
-              isSuccess: false,
+              'La guía pertenece a ${details.subcourierName}, no a $selectedSubName',
             );
+
+            if (mounted) {
+              setState(() {
+                _isBlocked = false;
+              });
+            }
             _controller.clear();
             return;
           }
@@ -233,30 +236,44 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             clientId: provider.selectedClientId,
             processInformation: ValidateGuideProcessType.toDispatchToClient,
           );
-          
+
           final validationResponse = await validationProvider.validateGuideStatusByProcess(validationRequest);
-          
+
           // Debug logs
           AppLogger.log('[DEBUG] validationResponse.isSuccessful: ${validationResponse.isSuccessful}', source: 'ClientDispatchScanBox');
           AppLogger.log('[DEBUG] validationResponse.content: ${validationResponse.content}', source: 'ClientDispatchScanBox');
           AppLogger.log('[DEBUG] validationResponse.content?.isValid: ${validationResponse.content?.isValid}', source: 'ClientDispatchScanBox');
           AppLogger.log('[DEBUG] validationResponse.messageDetail: ${validationResponse.messageDetail}', source: 'ClientDispatchScanBox');
-          
+
           final isValidState = validationResponse.isSuccessful && validationResponse.content?.isValid == true;
-          
+
           if (!isValidState) {
-            HapticFeedback.heavyImpact();
-            _showMessage(
+            // Sonido de error nativo del sistema
+            NativeSoundService.playErrorSound();
+
+            // Bloquear el scanner
+            setState(() {
+              _isBlocked = true;
+            });
+
+            // Mostrar diálogo bloqueante de error con messageDetail del backend
+            await MessageHelper.showBlockingErrorDialog(
               context,
-              validationResponse.messageDetail ?? validationResponse.content?.message ?? 'Error al validar la guía',
-              true,
+              validationResponse.messageDetail ?? '',
             );
+
+            // Desbloquear el scanner después de cerrar el diálogo
+            if (mounted) {
+              setState(() {
+                _isBlocked = false;
+              });
+            }
             _controller.clear();
             return;
           }
 
           provider.updateGuideUiState(cleanGuide, 'scanned');
-          
+
           // Bloquear selectores después del primer escaneo exitoso
           if (!provider.selectorsLocked) {
             provider.lockSelectors();
@@ -276,7 +293,10 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             provider.setGuides(newGuides);
           }
 
-          _showMessage(context, 'Guía escaneada correctamente', false, const Duration(milliseconds: 750));
+          // Mostrar mensaje del backend si existe
+          if (validationResponse.message?.isNotEmpty ?? false) {
+            _showMessage(context, validationResponse.message!, false, const Duration(milliseconds: 500));
+          }
 
           if (!provider.isGuideSelected(cleanGuide)) {
             provider.toggleGuideSelection(cleanGuide);
@@ -295,22 +315,36 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
         );
 
         final validationResponse = await validationProvider.validateGuideStatusByProcess(validationRequest);
-        
+
         // Debug logs - segundo flujo
         AppLogger.log('[DEBUG-2] validationResponse.isSuccessful: ${validationResponse.isSuccessful}', source: 'ClientDispatchScanBox');
         AppLogger.log('[DEBUG-2] validationResponse.content: ${validationResponse.content}', source: 'ClientDispatchScanBox');
         AppLogger.log('[DEBUG-2] validationResponse.content?.isValid: ${validationResponse.content?.isValid}', source: 'ClientDispatchScanBox');
         AppLogger.log('[DEBUG-2] validationResponse.messageDetail: ${validationResponse.messageDetail}', source: 'ClientDispatchScanBox');
-        
+
         final isValidState = validationResponse.isSuccessful && validationResponse.content?.isValid == true;
 
         if (!isValidState) {
-          HapticFeedback.heavyImpact();
-          _showMessage(
+          // Sonido de error nativo del sistema
+          NativeSoundService.playErrorSound();
+
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+
+          // Mostrar diálogo bloqueante de error con messageDetail del backend
+          await MessageHelper.showBlockingErrorDialog(
             context,
-            validationResponse.messageDetail ?? validationResponse.content?.message ?? 'Error al validar la guía',
-            true,
+            validationResponse.messageDetail ?? '',
           );
+
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
           return;
         }
 
@@ -333,16 +367,35 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
             provider.toggleGuideSelection(cleanGuide);
           }
 
+          // Mostrar mensaje del backend si existe
           if ((response.message ?? '').isNotEmpty) {
-            _showMessage(context, response.message!, false);
+            _showMessage(context, response.message!, false, const Duration(milliseconds: 500));
           }
 
           if (!provider.guides.any((g) => g.code == exactMatch.code)) {
             provider.setGuides([exactMatch, ...provider.guides]);
           }
         } else {
-          HapticFeedback.heavyImpact();
-          _showMessage(context, response.messageDetail ?? '', true);
+          // Sonido de error nativo del sistema
+          NativeSoundService.playErrorSound();
+          
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+          
+          // Mostrar diálogo bloqueante de error con messageDetail del backend
+          await MessageHelper.showBlockingErrorDialog(
+            context,
+            response.messageDetail ?? '',
+          );
+          
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
         }
 
         _controller.clear();
@@ -353,11 +406,7 @@ class _ClientDispatchScanBoxState extends State<ClientDispatchScanBox> {
           }
         });
       } catch (e) {
-        MessageHelper.showIconSnackBar(
-          context,
-          message: 'Error al procesar la guía',
-          isSuccess: false,
-        );
+        // No mostrar mensajes locales, solo del backend
       } finally {
         _controller.clear();
       }

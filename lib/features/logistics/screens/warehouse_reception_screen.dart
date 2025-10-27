@@ -42,17 +42,6 @@ class _WarehouseReceptionScreenState extends State<WarehouseReceptionScreen> {
           });
         }
 
-        // Mostrar mensaje de éxito
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Guía recibida correctamente'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
       }
     } finally {
       setState(() => _isLoading = false);

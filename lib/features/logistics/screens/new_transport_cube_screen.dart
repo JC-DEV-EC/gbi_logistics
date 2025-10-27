@@ -40,7 +40,7 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
     return confirmed ?? false;
   }
 
-  Future<void> _createNewCube(List<String> guides) async {
+  Future<bool> _createNewCube(List<String> guides) async {
     final provider = context.read<TransportCubeProvider>();
 
     try {
@@ -49,37 +49,37 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
         CubeType.transitToWarehouse,
       );
 
-      if (!mounted) return;
-
-      if (!mounted) return;
+      if (!mounted) return false;
 
       if (response.isSuccessful) {
         await provider.loadCubes(force: true);
-        if (!mounted) return;
-        Navigator.pop(context);
-      }
-
-      if (response.isSuccessful) {
-        final message = response.message ?? 'Operación exitosa';
+        if (!mounted) return false;
+        
+        final message = response.message ?? 'Cubo creado exitosamente';
         MessageHelper.showIconSnackBar(
           context,
           message: message,
           isSuccess: true,
         );
+        
+        Navigator.pop(context);
+        return true; // Éxito
       } else {
         // Mostrar diálogo bloqueante de error
         await MessageHelper.showBlockingErrorDialog(
           context,
           response.messageDetail ?? 'Error al crear el cubo',
         );
+        return false; // Error
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       // Mostrar diálogo bloqueante de error
       await MessageHelper.showBlockingErrorDialog(
         context,
         'Error al crear el cubo: ${e.toString()}',
       );
+      return false; // Error
     }
   }
 
@@ -104,7 +104,7 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
         child: CustomsDispatchScanBox(
           onComplete: (guides, createCube) async {
             if (createCube) {
-              await _createNewCube(guides);
+              return await _createNewCube(guides);
             } else {
               final guideProvider = context.read<GuideProvider>();
 
@@ -114,10 +114,16 @@ class _NewTransportCubeScreenState extends State<NewTransportCubeScreen> {
               );
 
               final resp = await guideProvider.updateGuideStatus(request);
-              if (!mounted) return;
+              if (!mounted) return false;
 
-              resp.showMessage(context);
-              Navigator.pop(context);
+              if (resp.isSuccessful) {
+                resp.showMessage(context);
+                Navigator.pop(context);
+                return true;
+              } else {
+                resp.showMessage(context);
+                return false;
+              }
             }
           },
         ),

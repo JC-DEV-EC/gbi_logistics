@@ -5,10 +5,11 @@ import '../controllers/scan_controller.dart';
 import '../../models/validate_guide_models.dart';
 import '../../providers/guide_validation_provider.dart';
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget para escaneo de guías en despacho en aduana
 class CustomsDispatchScanBox extends StatefulWidget {
-  final Function(List<String>, bool createCube) onComplete;
+  final Future<bool> Function(List<String>, bool createCube) onComplete;
 
   const CustomsDispatchScanBox({
     super.key,
@@ -51,21 +52,17 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
       }
     });
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildScanField(theme),
-          if (_scannedGuides.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _buildCreateCubeButton(),
-            const SizedBox(height: 16),
-            _buildGuidesList(),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildScanField(theme),
+        if (_scannedGuides.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildCreateCubeButton(),
+          const SizedBox(height: 16),
+          Expanded(child: _buildGuidesList()),
         ],
-      ),
+      ],
     );
   }
 
@@ -115,20 +112,16 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
   }
 
   Widget _buildGuidesList() {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 400),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        shrinkWrap: true,
-        itemCount: _scannedGuides.length,
-        itemBuilder: (context, index) {
-          final guide = _scannedGuides[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildGuideCard(guide),
-          );
-        },
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.all(8),
+      itemCount: _scannedGuides.length,
+      itemBuilder: (context, index) {
+        final guide = _scannedGuides[index];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildGuideCard(guide),
+        );
+      },
     );
   }
 
@@ -153,6 +146,10 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
     // No procesar si está bloqueado (evita que el scanner físico envíe datos)
     if (_isBlocked) return;
     
+    // Log de inicio de escaneo
+    final startTime = DateTime.now();
+    print('[SCAN-TIMER] Inicio escaneo de guía: $cleanGuide');
+    
     // Verificar si la guía ya fue escaneada
     if (_scannedGuides.contains(cleanGuide)) {
       MessageHelper.showIconSnackBar(
@@ -176,14 +173,43 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
         final resp = await validationProvider.validateGuideStatusByProcess(req);
         
         if (resp.isSuccessful && (resp.content?.isValid ?? false)) {
+          if (!mounted) return;
+          
+          // Si hay userMessage (no null y no vacío), mostrar diálogo bloqueante ANTES de agregar la guía
+          final userMessage = resp.content?.userMessage;
+          if (userMessage != null && userMessage.isNotEmpty) {
+            // Sonido de error
+            NativeSoundService.playErrorSound();
+            
+            // Bloquear el scanner
+            setState(() {
+              _isBlocked = true;
+            });
+            
+            // Mostrar diálogo bloqueante amarillo con userMessage
+            await MessageHelper.showBlockingWarningDialog(
+              context,
+              userMessage,
+            );
+            
+            // Desbloquear el scanner después de cerrar el diálogo
+            if (mounted) {
+              setState(() {
+                _isBlocked = false;
+              });
+            }
+          }
+          
+          // Agregar la guía DESPUÉS de mostrar el mensaje (si había)
           setState(() {
             // Insertar al inicio para que la guía más reciente aparezca primero
             _scannedGuides.insert(0, cleanGuide);
           });
-          /*await AppSounds.success();*/
           
           if (!mounted) return;
-          if (resp.message?.isNotEmpty ?? false) {
+          
+          // Mostrar mensaje de éxito normal solo si NO había userMessage
+          if ((userMessage == null || userMessage.isEmpty) && (resp.message?.isNotEmpty ?? false)) {
             MessageHelper.showIconSnackBar(
               context,
               message: resp.message!,
@@ -192,6 +218,8 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
             );
           }
         } else {
+          // Sonido de error nativo del sistema
+          NativeSoundService.playErrorSound();
           
           // Bloquear el scanner
           setState(() {
@@ -220,6 +248,11 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
             }
           });
         }
+        
+        // Log de fin de escaneo
+        final endTime = DateTime.now();
+        final duration = endTime.difference(startTime).inMilliseconds;
+        print('[SCAN-TIMER] Fin escaneo de guía: $cleanGuide - Duración: ${duration}ms');
       }
     });
   }
@@ -228,17 +261,23 @@ class _CustomsDispatchScanBoxState extends State<CustomsDispatchScanBox> {
     if (_scannedGuides.isEmpty) return;
 
     final guides = List<String>.from(_scannedGuides);
-    widget.onComplete(guides, createCube);
+    // Llamar al callback y esperar el resultado
+    final success = await widget.onComplete(guides, createCube);
 
-    setState(() {
-      _scannedGuides.clear();
-    });
+    // Solo limpiar las guías si fue exitoso
+    if (success && mounted) {
+      setState(() {
+        _scannedGuides.clear();
+      });
+    }
 
-    Future.microtask(() {
-      if (!_focusNode.hasFocus) {
-        _focusNode.requestFocus();
-      }
-    });
+    if (mounted) {
+      Future.microtask(() {
+        if (!_focusNode.hasFocus) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   void _removeGuide(String guide) {

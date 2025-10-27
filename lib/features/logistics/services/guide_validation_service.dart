@@ -36,7 +36,8 @@ class GuideValidationService {
             isValid: contentHasIsValid ? (contentMap['isValid'] as bool? ?? false) : isSuccess,
             currentState: contentMap['currentState'] as String?,
             requiredState: contentMap['requiredState'] as String?,
-            message: contentMap['message'] as String? ?? contentMap['userMessage'] as String?,
+            message: contentMap['message'] as String?,
+            userMessage: contentMap['userMessage'] as String?,
           );
         } else {
           // Sin content, usar el código general

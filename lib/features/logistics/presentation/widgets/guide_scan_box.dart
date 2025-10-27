@@ -6,6 +6,7 @@ import '../../providers/guide_provider.dart';
 import '../controllers/scan_controller.dart';
 /*import '../../services/app_sounds.dart';*/
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget minimalista para escaneo de guías
 class GuideScanBox extends StatefulWidget {
@@ -35,6 +36,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
   // Estado interno
   final Set<String> _scannedGuides = {};
   bool _canComplete = false;
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -72,6 +74,9 @@ class _GuideScanBoxState extends State<GuideScanBox> {
     if (guide == null || guide.isEmpty) return;
     final cleanGuide = guide.trim();
     if (cleanGuide.isEmpty) return;
+    
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
 
     await _scanController.processScan(() async {
       try {
@@ -106,26 +111,48 @@ class _GuideScanBoxState extends State<GuideScanBox> {
               }
               _controller.clear();
             } else {
-              HapticFeedback.heavyImpact();
-              /*await AppSounds.error();*/
-
-              if (!mounted) return;
-              MessageHelper.showIconSnackBar(
+              // Sonido de error nativo del sistema
+              NativeSoundService.playErrorSound();
+              
+              // Bloquear el scanner
+              setState(() {
+                _isBlocked = true;
+              });
+              
+              // Mostrar diálogo bloqueante de error con messageDetail del backend
+              await MessageHelper.showBlockingErrorDialog(
                 context,
-                message: response.messageDetail ?? '',
-                isSuccess: false,
+                response.messageDetail ?? '',
               );
+              
+              // Desbloquear el scanner después de cerrar el diálogo
+              if (mounted) {
+                setState(() {
+                  _isBlocked = false;
+                });
+              }
             }
           } else {
-            HapticFeedback.heavyImpact();
-            /*await AppSounds.error();*/
-
-            if (!mounted) return;
-              MessageHelper.showIconSnackBar(
-                context,
-                message: response.messageDetail ?? '',
-                isSuccess: false,
-              );
+            // Sonido de error nativo del sistema
+            NativeSoundService.playErrorSound();
+            
+            // Bloquear el scanner
+            setState(() {
+              _isBlocked = true;
+            });
+            
+            // Mostrar diálogo bloqueante de error con messageDetail del backend
+            await MessageHelper.showBlockingErrorDialog(
+              context,
+              response.messageDetail ?? '',
+            );
+            
+            // Desbloquear el scanner después de cerrar el diálogo
+            if (mounted) {
+              setState(() {
+                _isBlocked = false;
+              });
+            }
           }
         } else {
           // Sin validación contra backend, solo expectedGuides
@@ -143,10 +170,7 @@ class _GuideScanBoxState extends State<GuideScanBox> {
           }
         }
       } catch (_) {
-        if (mounted) {
-          /*await AppSounds.error();*/
-          // No mostrar mensajes locales; el backend debe proveer messageDetail
-        }
+        // No mostrar mensajes locales; el backend debe proveer messageDetail
       } finally {
         _controller.clear();
         Future.microtask(() {
@@ -179,13 +203,18 @@ class _GuideScanBoxState extends State<GuideScanBox> {
             controller: _controller,
             focusNode: _focusNode,
             autofocus: true,
+            enabled: !_isBlocked, // Deshabilitar cuando está bloqueado
             decoration: InputDecoration(
-              hintText: 'Escanee o ingrese el código de la guía',
+              hintText: _isBlocked
+                  ? 'Presione Continuar en el diálogo de error'
+                  : 'Escanee o ingrese el código de la guía',
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
-                color: theme.colorScheme.primary.withValues(alpha: 128),
+                color: _isBlocked
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.primary.withValues(alpha: 128),
               ),
             ),
             onSubmitted: _handleGuideInput,

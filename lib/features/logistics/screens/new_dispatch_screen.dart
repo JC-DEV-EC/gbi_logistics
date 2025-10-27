@@ -85,15 +85,28 @@ class _NewDispatchScreenState extends State<NewDispatchScreen> {
         }
 
         if (!mounted) return;
+        
+        // Mostrar mensaje de éxito
+        final message = response.message ?? 'Despacho creado exitosamente';
+        MessageHelper.showIconSnackBar(
+          context,
+          message: message,
+          isSuccess: true,
+        );
+        
+        // Limpiar guías solo si fue exitoso
         setState(() {
           _validatedGuides.clear();
           _selectionsLocked = false;
         });
         Navigator.pop(context);
+      } else {
+        // Mostrar diálogo bloqueante de error (mantener las guías)
+        await MessageHelper.showBlockingErrorDialog(
+          context,
+          response.messageDetail ?? 'Error al crear el despacho',
+        );
       }
-
-      // Mostrar mensaje del backend (éxito o error)
-      response.showMessage(context);
     } finally {
       if (mounted) {
         setState(() {

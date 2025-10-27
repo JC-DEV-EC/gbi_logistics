@@ -347,6 +347,72 @@ class MessageHelper {
     );
   }
 
+  /// Muestra un diálogo de advertencia bloqueante (amarillo) para mensajes de usuario
+  static Future<void> showBlockingWarningDialog(BuildContext context, String message) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false, // No se puede cerrar tocando fuera
+      builder: (context) => PopScope(
+        canPop: false, // Evita que se cierre con el botón Atrás
+        child: AlertDialog(
+          backgroundColor: const Color(0xFFFFF3CD),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(
+              color: Color(0xFFFF9800),
+              width: 2,
+            ),
+          ),
+          title: const Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFE65100),
+                size: 32,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Advertencia',
+                  style: TextStyle(
+                    color: Color(0xFFE65100),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Color(0xFF5D4037),
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF9800),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Continuar',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Construye un widget de error con opción de reintento
   static Widget buildErrorWidget({
     required String error,

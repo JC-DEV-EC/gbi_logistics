@@ -7,7 +7,7 @@ class ApiConfig {
   static const tokenCheckInterval = Duration(minutes: 15);
   /// URL base de la API
   static const String baseUrl = 'https://internalapi.gbilogistics.net';
-
+ ///
   /// Versión de la API
   static const String version = '1.0';
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../controllers/scan_controller.dart';
 import '../../providers/guide_validation_provider.dart';
+import '../../models/validate_guide_models.dart';
 import 'package:provider/provider.dart';
-import '../../providers/auth_provider.dart';
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget para escaneo y validación de guías
 class GuideValidationScanBox extends StatefulWidget {
@@ -54,6 +54,10 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
     
     // No procesar si está bloqueado (evita que el scanner físico envíe datos)
     if (_isBlocked) return;
+    
+    // Log de inicio de escaneo
+    final startTime = DateTime.now();
+    print('[SCAN-TIMER] Inicio escaneo de guía: $cleanGuide');
 
     // Verificar si la guía ya fue validada
     if (_alreadyValidatedGuides.contains(cleanGuide)) {
@@ -69,41 +73,68 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
 
     // Usar el controlador de escaneo para procesar la guía
     await _scanController.processScan(() async {
-      // Refrescar token primero
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.ensureFreshToken();
-
       if (!mounted) return;
 
       final provider = context.read<GuideValidationProvider>();
-      final response = await provider.validateGuideForCube(
+      final request = ValidateGuideStatusByProcessRequest(
         guideCode: cleanGuide,
         subcourierId: widget.selectedSubcourierId,
         clientId: widget.selectedClientId,
+        processInformation: ValidateGuideProcessType.toRegisterCubeToDispatch,
       );
+      
+      final response = await provider.validateGuideStatusByProcess(request);
 
       if (!mounted) return;
 
-      // El provider retorna ApiResponse<void>, por lo que no hay content. Usar solo el flag de éxito del backend
-      final isValid = response.isSuccessful;
+      // Verificar si la guía es válida
+      final isValid = response.isSuccessful && (response.content?.isValid ?? false);
 
-      // Reproducir sonido según resultado
       if (isValid) {
-        SystemSound.play(SystemSoundType.click);
+        // Si hay userMessage (no null y no vacío), mostrar diálogo bloqueante ANTES de agregar la guía
+        final userMessage = response.content?.userMessage;
+        if (userMessage != null && userMessage.isNotEmpty) {
+          // Sonido de error
+          NativeSoundService.playErrorSound();
+          
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+          
+          // Mostrar diálogo bloqueante amarillo con userMessage
+          await MessageHelper.showBlockingWarningDialog(
+            context,
+            userMessage,
+          );
+          
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
+        }
+        
+        // Agregar la guía DESPUÉS de mostrar el mensaje (si había)
         _alreadyValidatedGuides.add(cleanGuide);
         widget.onGuideValidated(cleanGuide);
         
-        // Mostrar mensaje de éxito si existe
-        final message = response.message ?? '';
-        if (message.isNotEmpty) {
-          MessageHelper.showIconSnackBar(
-            context,
-            message: message,
-            isSuccess: true,
-            successDuration: const Duration(milliseconds: 500),
-          );
+        // Mostrar mensaje de éxito solo si NO había userMessage
+        if (userMessage == null || userMessage.isEmpty) {
+          final message = response.message ?? '';
+          if (message.isNotEmpty) {
+            MessageHelper.showIconSnackBar(
+              context,
+              message: message,
+              isSuccess: true,
+              successDuration: const Duration(milliseconds: 500),
+            );
+          }
         }
       } else {
+        // Sonido de error nativo del sistema
+        NativeSoundService.playErrorSound();
         
         // Bloquear el scanner
         setState(() {
@@ -124,6 +155,11 @@ class _GuideValidationScanBoxState extends State<GuideValidationScanBox> {
 
       // Limpiar input
       _controller.clear();
+      
+      // Log de fin de escaneo
+      final endTime = DateTime.now();
+      final duration = endTime.difference(startTime).inMilliseconds;
+      print('[SCAN-TIMER] Fin escaneo de guía: $cleanGuide - Duración: ${duration}ms');
     });
   }
 

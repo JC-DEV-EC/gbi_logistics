@@ -23,7 +23,7 @@ class VersionService {
       // Asegurar valores por defecto en caso de error
       _packageInfo = PackageInfo(
         version: '1.0.0',
-        buildNumber: '5',
+        buildNumber: '7',
         appName: 'GBI Logistics',
         packageName: 'com.gbi.logistics',
       );
@@ -32,13 +32,13 @@ class VersionService {
   
   /// Obtiene la versión completa del app (ej: "1.0.0+1")
   String get fullVersion {
-    if (_packageInfo == null) return '1.0.0+5';
+    if (_packageInfo == null) return '1.0.0+7';
     return '${_packageInfo!.version}+${_packageInfo!.buildNumber}';
   }
   
   /// Obtiene solo la versión (ej: "1.0.0.0")
   String get version {
-    if (_packageInfo == null) return '1.0.0.5';
+    if (_packageInfo == null) return '1.0.0.7';
     // Asegurarnos de que el formato sea correcto para el backend
     return '${_packageInfo!.version}.${_packageInfo!.buildNumber}';
   }

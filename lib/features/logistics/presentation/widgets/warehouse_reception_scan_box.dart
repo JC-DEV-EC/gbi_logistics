@@ -7,6 +7,7 @@ import '../controllers/scan_controller.dart';
 /*import '../../services/app_sounds.dart';*/
 import '../../../../core/services/app_logger.dart';
 import '../helpers/error_helper.dart';
+import '../../services/native_sound_service.dart';
 
 /// Widget para escaneo de guías en recepción en bodega
 class WarehouseReceptionScanBox extends StatefulWidget {
@@ -27,6 +28,7 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
   final FocusNode _focusNode = FocusNode();
   final ScanController _scanController = ScanController();
   final Set<String> _scannedGuides = {};
+  bool _isBlocked = false; // Bloquea el scanner cuando hay error
 
   @override
   void initState() {
@@ -65,13 +67,18 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
             controller: _controller,
             focusNode: _focusNode,
             autofocus: true,
+            enabled: !_isBlocked, // Deshabilitar cuando está bloqueado
             decoration: InputDecoration(
-              hintText: 'Escanee o ingrese el código de la guía',
+              hintText: _isBlocked
+                  ? 'Presione Continuar en el diálogo de error'
+                  : 'Escanee o ingrese el código de la guía',
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               border: InputBorder.none,
               suffixIcon: Icon(
                 Icons.qr_code_scanner,
-                color: theme.colorScheme.primary.withValues(alpha: 128),
+                color: _isBlocked
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.primary.withValues(alpha: 128),
               ),
             ),
             onChanged: (value) {
@@ -90,6 +97,9 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
     if (guide == null || guide.trim().isEmpty) return;
 
     final cleanGuide = guide.trim();
+    
+    // No procesar si está bloqueado (evita que el scanner físico envíe datos)
+    if (_isBlocked) return;
 
     await _scanController.processScan(() async {
       try {
@@ -104,12 +114,26 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
         final response = await guideProvider.updateGuideStatus(updateRequest);
 
         if (!response.isSuccessful) {
-          /*await AppSounds.error();*/
-          MessageHelper.showIconSnackBar(
+          // Sonido de error nativo del sistema
+          NativeSoundService.playErrorSound();
+          
+          // Bloquear el scanner
+          setState(() {
+            _isBlocked = true;
+          });
+          
+          // Mostrar diálogo bloqueante de error
+          await MessageHelper.showBlockingErrorDialog(
             context,
-            message: response.messageDetail ?? 'Error al actualizar guía',
-            isSuccess: false,
+            response.messageDetail ?? 'Error al procesar la guía',
           );
+          
+          // Desbloquear el scanner después de cerrar el diálogo
+          if (mounted) {
+            setState(() {
+              _isBlocked = false;
+            });
+          }
           return;
         }
 
@@ -124,9 +148,9 @@ class _WarehouseReceptionScanBoxState extends State<WarehouseReceptionScanBox> {
 
         MessageHelper.showIconSnackBar(
           context,
-          message: response.message ?? 'Guía recibida correctamente',
+          message: response.message ?? '',
           isSuccess: true,
-          successDuration: const Duration(milliseconds: 750),
+          successDuration: const Duration(milliseconds: 500),
         );
 
         // Notificar cambio
