@@ -71,6 +71,7 @@ class LoginResponse {
   final String? personFirstName;
   final String? personLastName;
   final String? entityName;
+  final String? courierImageUrl;
   final List<SubcourierInfo> subcouriersInformation;
   final DashboardData dashboardData;
 
@@ -79,6 +80,7 @@ class LoginResponse {
     this.personFirstName,
     this.personLastName,
     this.entityName,
+    this.courierImageUrl,
     required this.subcouriersInformation,
     required this.dashboardData,
   });
@@ -97,6 +99,7 @@ class LoginResponse {
       personFirstName: content['personFirstName'] as String?,
       personLastName: content['personLastName'] as String?,
       entityName: content['entityName'] as String?,
+      courierImageUrl: content['courierImageUrl'] as String?,
       subcouriersInformation: (content['subcouriersInformation'] as List<dynamic>?)
           ?.map((e) => SubcourierInfo.fromJson(e as Map<String, dynamic>))
           .toList() ?? [],
@@ -112,6 +115,7 @@ class LoginResponse {
       'personFirstName': personFirstName,
       'personLastName': personLastName,
       'entityName': entityName,
+      'courierImageUrl': courierImageUrl,
       'subcouriersInformation': subcouriersInformation
           .map((e) => {
             'id': e.id,

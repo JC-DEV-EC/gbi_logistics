@@ -5,6 +5,8 @@ import '../../../core/presentation/widgets/login_background.dart';
 import '../presentation/helpers/error_helper.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../../../core/services/app_update_service.dart';
+import '../../../core/services/version_service.dart';
 
 /// Pantalla de login
 class LoginScreen extends StatefulWidget {
@@ -65,6 +67,21 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
       return;
     }
 
+    // Verificar versión antes de hacer login
+    final versionHeaders = VersionService.instance.versionHeaders;
+    final versionResponse = VersionResponse.fromHeaders(versionHeaders);
+    
+    if (versionResponse.updateRequired) {
+      final needsUpdate = await AppUpdateService.instance.checkVersionBeforeLogin(
+        context,
+        versionResponse,
+      );
+      if (needsUpdate) {
+        logState('Login blocked due to outdated app version');
+        return;
+      }
+    }
+
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
@@ -84,12 +101,32 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
 
       if (mounted) {
         final error = context.read<AuthProvider>().error;
+        developer.log('Login error message: $error', name: 'LoginScreen');
+        
         if (error != null && error.isNotEmpty) {
-          MessageHelper.showIconSnackBar(
-            context,
-            message: error,
-            isSuccess: false,
-          );
+          // Si el error es de versión, mostrar diálogo de actualización
+          if (error.contains('versión mínima')) {
+            developer.log('VERSION ERROR DETECTED - Showing update dialog', name: 'LoginScreen');
+            logState('Showing update dialog due to version error from backend');
+            AppUpdateService.instance.handleVersionResponse(
+              context,
+              VersionResponse(
+                updateRequired: true,
+                updateMessage: error,
+              ),
+            );
+            developer.log('Update dialog triggered', name: 'LoginScreen');
+          } else {
+            developer.log('Normal error - Showing snackbar', name: 'LoginScreen');
+            // Para otros errores, mostrar snackbar normal
+            MessageHelper.showIconSnackBar(
+              context,
+              message: error,
+              isSuccess: false,
+            );
+          }
+        } else {
+          developer.log('Error is null or empty', name: 'LoginScreen');
         }
       }
     }
@@ -217,18 +254,6 @@ class _LoginScreenState extends LoggingState<LoginScreen> {
                             },
                             onFieldSubmitted: (_) => _handleSubmit(),
                           ),
-
-                          // Error
-                          if (auth.error != null) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              auth.error!,
-                              style: TextStyle(
-                                color: theme.colorScheme.error,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
                           const SizedBox(height: 24),
 
                           // Botón de login

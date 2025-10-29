@@ -22,6 +22,60 @@ class AppDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Imagen del courier
+                if (auth.loginData?.courierImageUrl != null && 
+                    auth.loginData!.courierImageUrl!.isNotEmpty) ...[
+                  Center(
+                    child: SizedBox(
+                      height: 50,
+                      child: Image.network(
+                        auth.loginData!.courierImageUrl!,
+                        height: 50,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return SizedBox(
+                            height: 50,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                value: loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                        loadingProgress.expectedTotalBytes!
+                                    : null,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return CircleAvatar(
+                            radius: 28,
+                            backgroundColor: theme.colorScheme.onPrimary,
+                            child: Icon(
+                              Icons.person,
+                              size: 32,
+                              color: theme.colorScheme.primary,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ] else ...[
+                  Center(
+                    child: CircleAvatar(
+                      radius: 28,
+                      backgroundColor: theme.colorScheme.onPrimary,
+                      child: Icon(
+                        Icons.person,
+                        size: 32,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Text(
                   '¡Bienvenido${auth.loginData?.personFirstName != null ? ', ${auth.loginData!.personFirstName}' : ''}!',
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -29,7 +83,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                 ),
                 if (auth.loginData?.entityName != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 2),
                   Text(
                     auth.loginData!.entityName!,
                     style: theme.textTheme.titleMedium?.copyWith(

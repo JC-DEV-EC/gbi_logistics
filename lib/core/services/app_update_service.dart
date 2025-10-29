@@ -44,7 +44,9 @@ class AppUpdateService {
             children: [
               Icon(Icons.system_update, color: Colors.orange),
               SizedBox(width: 8),
-              Text('Actualización Requerida'),
+              Expanded(
+                child: Text('Actualización Requerida'),
+              ),
             ],
           ),
           content: Column(
@@ -75,12 +77,11 @@ class AppUpdateService {
           actions: [
             ElevatedButton.icon(
               onPressed: () {
-                _openAppStore(versionResponse.updateUrl);
-                // Opcionalmente, cerrar la aplicación después de abrir la tienda
-                // SystemNavigator.pop(); // Descomentar si quieres forzar el cierre de la app
+                Navigator.of(context).pop();
+                _isShowingUpdateDialog = false;
               },
-              icon: const Icon(Icons.download),
-              label: const Text('Actualizar'),
+              icon: const Icon(Icons.close),
+              label: const Text('Cerrar'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,

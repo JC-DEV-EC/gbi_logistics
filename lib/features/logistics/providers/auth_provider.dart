@@ -106,7 +106,9 @@ class AuthProvider extends ChangeNotifier {
       // Verificar si el error es por versión
       if (response.messageDetail?.contains('versión mínima') ?? false) {
         _error = response.messageDetail;
-        await logout();
+        // No limpiar credenciales ni el error para que se muestre el diálogo
+        _isAuthenticated = false;
+        _loginData = null;
         notifyListeners();
         return false;
       }

@@ -274,10 +274,10 @@ abstract class TransportCubeDetailsBaseScreenState<T extends TransportCubeDetail
                           stateLabel: guide.stateLabel ?? GuideTransportCubeState.getLabel(guide.state),
                           showLabel: true,
                         ),
-                        trailing: IconButton(
+                        /*trailing: IconButton(
                           icon: const Icon(Icons.more_vert),
                           onPressed: () => _showGuideActions(context, guide),
-                        ),
+                        ),*/
                       ),
                     ],
                   );

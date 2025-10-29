@@ -189,6 +189,13 @@ class HttpService {
 
       _checkVersionHeaders(response.headers);
 
+      if (response.statusCode == 503 || response.statusCode == 501) {
+        return ApiResponse.error(
+          messageDetail: 'Ocurrió un error en el servidor',
+          content: null,
+        );
+      }
+
       if (response.statusCode == 401) {
         if (!_isHandlingExpiredSession && !suppressAuthHandling) {
           final refreshed = await _attemptTokenRefresh();
@@ -216,7 +223,7 @@ class HttpService {
         );
 
         return ApiResponse.error(
-          messageDetail: refreshedMessageDetail,
+          messageDetail: refreshedMessageDetail ?? 'Su sesión ha finalizado, por favor ingrese de nuevo',
           content: null,
         );
       }
@@ -308,6 +315,13 @@ class HttpService {
 
       _checkVersionHeaders(response.headers);
 
+      if (response.statusCode == 503 || response.statusCode == 501) {
+        return ApiResponse.error(
+          messageDetail: 'Ocurrió un error en el servidor',
+          content: null,
+        );
+      }
+
       if (response.statusCode == 401) {
         String? refreshedMessageDetail;
         try {
@@ -323,7 +337,7 @@ class HttpService {
         );
 
         return ApiResponse.error(
-          messageDetail: refreshedMessageDetail,
+          messageDetail: refreshedMessageDetail ?? 'Su sesión ha finalizado, por favor ingrese de nuevo',
           content: null,
         );
       }
@@ -353,8 +367,12 @@ class HttpService {
         );
       }
 
+      // Verificar si el código 2 es un error de versión (no de token)
+      final isVersionError = code == 2 && 
+          (messageDetail?.contains('versión') ?? false);
+      
       final error = ApiError(code: code, message: messageDetail ?? '');
-      if (error.isAuthError || code == ApiErrorCode.invalidToken) {
+      if (!isVersionError && (error.isAuthError || code == ApiErrorCode.invalidToken)) {
         await _handleSessionExpired(
           suppressAuthHandling: suppressAuthHandling,
           messageDetail: messageDetail,
@@ -415,6 +433,13 @@ class HttpService {
           name: 'HttpService');
       developer.log('Response Body: ${response.body}', name: 'HttpService');
 
+      if (response.statusCode == 503 || response.statusCode == 501) {
+        return ApiResponse.error(
+          messageDetail: 'Ocurrió un error en el servidor',
+          content: null,
+        );
+      }
+
       if (response.statusCode == 401) {
         String? refreshedMessageDetail;
         try {
@@ -430,7 +455,7 @@ class HttpService {
         );
 
         return ApiResponse.error(
-          messageDetail: refreshedMessageDetail,
+          messageDetail: refreshedMessageDetail ?? 'Su sesión ha finalizado, por favor ingrese de nuevo',
           content: null,
         );
       }
